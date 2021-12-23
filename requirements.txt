@@ -1,0 +1,2 @@
+requests
+PySide6 			# or PySide2 or PyQt5
