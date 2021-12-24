@@ -4,7 +4,7 @@ from urllib.request import getproxies
 
 from qtimports import *
 import utils
-from sysproxy import Sysproxy
+from sysproxy import Sysproxy, Proxy
 
 # ******************************************************************************** #
 # *****          BrowseEdit
@@ -164,7 +164,7 @@ class MainWindow(BasicDialog):
                                'rsync': {'host': '', 'port': -1, 'auth': False, 'user': '', 'pass': ''},
                                'noproxy': {'enabled': True, 'hosts': []}
                               }
-        self.sysproxy = Sysproxy()
+        self.sysproxy = Proxy()
         rec = QtGui.QGuiApplication.primaryScreen().geometry()
         super().__init__(title='Proxen!', icon='proxen.png', geometry=(rec.width() // 2 - 175, rec.height() // 2 - 125, 350, 500),
                          flags=QtCore.Qt.Dialog | QtCore.Qt.MSWindowsFixedSizeDialogHint)
@@ -174,6 +174,7 @@ class MainWindow(BasicDialog):
     def settings_from_system(self):
         print(self.sysproxy.enabled)
         print(self.sysproxy.noproxy)
+        print(Sysproxy.get_sys_proxy_parsed('https_proxy'))
 
     def settings_to_gui(self):
         pass
