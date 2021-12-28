@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os, platform, traceback, copy, re, json, subprocess
+import os, platform, traceback, re, json, subprocess
 import dataclasses
 from collections.abc import Callable
 
@@ -7,12 +7,26 @@ OS = platform.system()
 
 if OS == 'Windows':
     import winreg
+    WIN_REG_BRANCHES = {'HKEY_CLASSES_ROOT': winreg.HKEY_CLASSES_ROOT,
+                        'HKCR': winreg.HKEY_CLASSES_ROOT,
+                        'HKEY_CURRENT_USER': winreg.HKEY_CURRENT_USER,
+                        'HKCU': winreg.HKEY_CURRENT_USER,
+                        'HKEY_LOCAL_MACHINE': winreg.HKEY_LOCAL_MACHINE,
+                        'HKLM': winreg.HKEY_LOCAL_MACHINE,
+                        'HKEY_USERS': winreg.HKEY_USERS,
+                        'HKU': winreg.HKEY_USERS,
+                        'HKEY_CURRENT_CONFIG': winreg.HKEY_CURRENT_CONFIG,
+                        'HKCC': winreg.HKEY_CURRENT_CONFIG
+                        }
 
 import utils
 
-# --------------------------------------------------------------- #    
+# --------------------------------------------------------------- #
 
+CURRENT_USER = utils.has_admin()
 WIN_PROXY_KEY = r'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+WIN_ENV_LOCAL_KEY = 'Environment' # HKCU branch
+WIN_ENV_SYSTEM_KEY = r'SYSTEM\CurrentControlSet\Control\Session Manager\Environment' # HKLM branch
 UNIX_PROFILE_FILES = ['~/.profile', '~/.bashrc', '~/.zshrc', '/etc/profile', '/etc/environment', '/etc/bash.bashrc', '/etc/zsh/zshrc']
 REGEX_PROXY_EXPORT = r'(export\s{}=)(.*)'
 
@@ -34,10 +48,10 @@ class Dclass:
     def __str__(self):
         return self.proxystr
 
-    def __setattr__(self, name, value):        
+    def __setattr__(self, name, value):
         super().__setattr__(name, value)
         if getattr(self, 'on_setattr', None) and name != 'on_setattr':
-            self.on_setattr(self, name, value)        
+            self.on_setattr(self, name, value)
 
 # --------------------------------------------------------------- #
 
@@ -58,7 +72,7 @@ class Proxyconf(Dclass):
             auth_ = ''
         return f'{self.protocol}://{auth_}{self.host}:{self.port}'
 
-# --------------------------------------------------------------- #          
+# --------------------------------------------------------------- #
 
 @dataclasses.dataclass
 class Noproxy(Dclass):
@@ -89,133 +103,238 @@ class Noproxy(Dclass):
 
     @property
     def proxystr(self):
-        return self.getstr(False)        
+        return self.getstr(False)
 
     def __bool__(self):
         return bool(self.noproxies)
 
 # --------------------------------------------------------------- #
 
-class Sysproxy: 
+class Sysproxy:
 
-    @staticmethod
-    def win_get_reg(valname):
+    def __init__(self, unix_file='~/.profile'):
+        self.unix_file = unix_file
+        self.update_vars()
+
+    def update_vars(self):
+        if OS == 'Windows':
+            # propagate env vars by calling setx
+            subprocess.run(f'setx ttt t > nul', shell=True)
+            self.locals = self.win_list_reg(WIN_ENV_LOCAL_KEY) or {}
+            self.globals = self.win_list_reg(WIN_ENV_SYSTEM_KEY, 'HKLM') or {}
+        else:
+            self.locals = {}
+            for fname in {self.unix_file, '~/.profile', '~/.bashrc', '~/.zshrc'}:
+                res = self._unix_get_envs(fname)
+                if res:
+                    self.locals.update(res)
+            self.globals = {}
+            for fname in {'/etc/profile', '/etc/environment', '/etc/bash.bashrc', '/etc/zsh/zshrc'}:
+                res = self._unix_get_envs(fname)
+                if res:
+                    self.globals.update(res)
+
+    def _unix_get_envs(self, filepath):
+        if OS == 'Windows' or not os.path.isfile(filepath):
+            return None
+        try:
+            res = {}
+            with open(filepath, 'r', encoding=utils.CODING) as f_:
+                ftext = f_.read().strip()
+            reg = re.compile(r'^export\s([\w\d_]+)=(.*)$', re.I)
+            for m in reg.finditer(ftext):
+                if m:
+                    res[m[1]] = m[2]
+            return res
+        except:
+            traceback.print_exc()
+            return None
+
+    def win_get_reg(self, keyname, valname, branch='HKEY_CURRENT_USER') -> tuple[str, int]:
         if OS != 'Windows':
             raise Exception('This method is available only on Windows platforms!')
+        if isinstance(branch, str):
+            branch = WIN_REG_BRANCHES[branch]
         k = None
-        res = None   
+        res = None
         try:
-            k = winreg.OpenKeyEx(winreg.HKEY_CURRENT_USER, WIN_PROXY_KEY)
-            res = winreg.QueryValueEx(k, valname)[0]
+            k = winreg.OpenKeyEx(branch, keyname)
+            res = winreg.QueryValueEx(k, valname)
         except:
             traceback.print_exc()
         finally:
             if k: winreg.CloseKey(k)
-        utils.log(f'Get win reg key {WIN_PROXY_KEY}\\{valname} = {res}', 'debug')
         return res
 
-    @staticmethod
-    def win_set_reg(valname, value, create=True):
+    def win_set_reg(self, keyname, valname, value, branch='HKEY_CURRENT_USER') -> tuple[str, int]:
         if OS != 'Windows':
             raise Exception('This method is available only on Windows platforms!')
+        if isinstance(branch, str):
+            branch = WIN_REG_BRANCHES[branch]
         k = None
-        res = None   
+        res = None
         try:
-            k = winreg.OpenKeyEx(winreg.HKEY_CURRENT_USER, WIN_PROXY_KEY, 0, winreg.KEY_ALL_ACCESS if create else winreg.KEY_READ)
+            k = winreg.OpenKeyEx(branch, keyname, 0, winreg.KEY_ALL_ACCESS)
             val = winreg.QueryValueEx(k, valname)
             if val[0] != value:
                 winreg.SetValueEx(k, valname, 0, val[1], value)
-            res = winreg.QueryValueEx(k, valname)[0]            
+            res = winreg.QueryValueEx(k, valname)
         except:
             traceback.print_exc()
         finally:
             if k: winreg.CloseKey(k)
-        utils.log(f'Set win reg key {WIN_PROXY_KEY}\\{valname} = {value}', 'debug')
         return res
 
-    @staticmethod
-    def get_sys_env(envname: str, both_cases=True, default=None):
-        if OS == 'Windows':
-            envs = subprocess.check_output(['set'], shell=True, encoding=utils.CODING, errors='ignore')
-            if not envs: return None
-            for str_env in envs.split('\n'):
-                sp = str_env.strip().split('=')
-                if len(sp) == 2 and sp[0].upper() == envname.upper():
-                    return sp[1]
+    def win_del_reg(self, keyname, valname, branch='HKEY_CURRENT_USER') -> bool:
+        if OS != 'Windows':
+            raise Exception('This method is available only on Windows platforms!')
+        if isinstance(branch, str):
+            branch = WIN_REG_BRANCHES[branch]
+        k = None
+        res = False
+        try:
+            k = winreg.OpenKeyEx(branch, keyname, 0, winreg.KEY_ALL_ACCESS)
+            winreg.DeleteValue(k, valname)
+            res = True
+        except:
+            traceback.print_exc()
+        finally:
+            if k: winreg.CloseKey(k)
+        return res
+
+    def win_list_reg(self, keyname, branch='HKEY_CURRENT_USER', expand_vars=True) -> dict:
+        if OS != 'Windows':
+            raise Exception('This method is available only on Windows platforms!')
+        if isinstance(branch, str):
+            branch = WIN_REG_BRANCHES[branch]
+        res = {}
+        if expand_vars:
+            reg = re.compile(r'%(.+?)%')
+        try:
+            k = winreg.OpenKeyEx(branch, keyname, 0, winreg.KEY_READ)
+            info = winreg.QueryInfoKey(k)
+            for i in range(info[1]):
+                try:
+                    val = winreg.EnumValue(k, i)
+                    if not expand_vars:
+                        res[val[0]] = val[1:]
+                    else:
+                        v = reg.sub(lambda m: os.environ.get(m[1], m[0]), val[1])
+                        res[val[0]] = (v, val[2])
+                except OSError:
+                    break
+        except:
+            traceback.print_exc()
+        finally:
+            if k: winreg.CloseKey(k)
+        return res
+
+    def win_get_reg_proxy(self, valname) -> str:
+        res = self.win_get_reg(WIN_PROXY_KEY, valname)
+        if res is None:
+            utils.log(f'ERROR getting win reg key {WIN_PROXY_KEY}\\{valname}', 'error')
             return None
-        else:
-            if both_cases:
-                res = os.environ.get(envname.lower(), os.environ.get(envname.upper(), default))
-            else:
-                res = os.environ.get(envname, default)
-        utils.log(f'Get system env {envname} = {res}', 'debug')
-        return res
+        utils.log(f'Get win reg key {WIN_PROXY_KEY}\\{valname} = {res[0]}', 'debug')
+        return res[0]
 
-    @staticmethod
-    def list_sys_envs_proxy():
+    def win_set_reg_proxy(self, valname, value) -> str:
+        res = self.win_set_reg(WIN_PROXY_KEY, valname, value)
+        if res is None:
+            utils.log(f'ERROR setting win reg key {WIN_PROXY_KEY}\\{valname} = {value}', 'error')
+            return None
+        utils.log(f'Set win reg key {WIN_PROXY_KEY}\\{valname} = {res[0]}', 'debug')
+        return res[0]
+
+    def list_sys_envs_proxy(self) -> dict:
         proxies = [item for sublist in [[p.lower(), p.upper()] for p in ('http_proxy', 'https_proxy', 'ftp_proxy', 'rsync_proxy', 'no_proxy')] for item in sublist]
-        return {proxy: Sysproxy.get_sys_env(proxy, False) for proxy in proxies}
+        return {'user': {k: v for k, v in self.locals if k in proxies},
+                'system': {k: v for k, v in self.globals if k in proxies}}
 
-    @staticmethod
-    def set_sys_env(envname: str, value, both_cases=True, create=True):
-        env = Sysproxy.get_sys_env(envname, both_cases)
-        if env is None and not create:
-            return
-        if both_cases:
+    def get_sys_env(self, envname: str, default=None):
+        return 
+
+    def set_sys_env(self, envname: str, value, create=True, modes=('user',)):
+        if ('system' in modes) and (not CURRENT_USER[1]):
+            raise Exception('Cannot execute command: SU privilege asked!')
+        env = self.get_sys_env(envname)
+        if OS == 'Windows':
+            # Method 1
+            """
+            m = ' /M' if superuser else ''
+            subprocess.run(f'setx{m} {envname.upper()} "{value}" > nul', shell=True)
+            subprocess.run(f'setx ttt t > nul', shell=True)
+            """
+            # Method 2
+            for mode in modes:
+                if create or not env[mode] is None:
+                    if mode == 'user':
+                        self.win_set_reg(WIN_ENV_LOCAL_KEY, envname.upper(), value, 'HKCU')
+                    elif mode == 'system':
+                        self.win_set_reg(WIN_ENV_SYSTEM_KEY, envname.upper(), value, 'HKLM')
+            # propagate env vars by calling setx
+            subprocess.run(f'setx ttt t > nul', shell=True)
+        else:
             for e_ in (envname.lower(), envname.upper()):
                 os.environ[e_] = value
-                if OS == 'Windows':
-                    subprocess.run(['set', f'{e_}={value}'], shell=True)
-                utils.log(f'Set system env {e_} = {value}', 'debug')
-        else:
-            os.environ[envname] = value
-            utils.log(f'Set system env {envname} = {value}', 'debug')
+        utils.log(f'Set system env {envname} = {value}', 'debug')
 
-    @staticmethod
-    def unset_sys_env(envname: str, both_cases=True):
-        if both_cases:
+
+    def unset_sys_env(self, envname: str, modes=('user',)):
+        if ('system' in modes) and (not CURRENT_USER[1]):
+            raise Exception('Cannot execute command: SU privilege asked!')
+        if OS == 'Windows':
+            # Method 1
+            """
+            m = ' /M' if superuser else ''
+            subprocess.run(f'setx{m} {envname.upper()} "" > nul', shell=True)
+            subprocess.run(f'setx ttt t > nul', shell=True)
+            """
+            # Method 2
+            for mode in modes:
+                if mode == 'user':
+                    self.win_del_reg(WIN_ENV_LOCAL_KEY, envname.upper(), 'HKCU')
+                elif mode == 'system':
+                    self.win_del_reg(WIN_ENV_SYSTEM_KEY, envname.upper(), 'HKLM')
+            # propagate env vars by calling setx
+            subprocess.run(f'setx ttt t > nul', shell=True)
+        else:
             for e_ in (envname.lower(), envname.upper()):
                 if e_ in os.environ:
                     del os.environ[e_]
-                    if OS == 'Windows':
-                        subprocess.run(['set', f'{e_}='], shell=True)
-                    utils.log(f'Delete system env {e_}', 'debug')
-        else:
-            os.environ.pop(envname, default=None)
-            utils.log(f'Delete system env {envname}', 'debug')
+        utils.log(f'Delete system env {envname}', 'debug')
 
-    @staticmethod
-    def get_sys_http_proxy() -> str:
+
+    def get_sys_http_proxy(self) -> str:
         if OS == 'Windows':
-            res = Sysproxy.win_get_reg('ProxyServer')
+            res = self.win_get_reg_proxy('ProxyServer')
             if res is None:
-                res = Sysproxy.get_sys_env('http_proxy') or Sysproxy.get_sys_env('all_proxy')
+                res = self.get_sys_env('http_proxy') or self.get_sys_env('all_proxy')
             return res
-        return Sysproxy.get_sys_env('http_proxy') or Sysproxy.get_sys_env('all_proxy')
+        return self.get_sys_env('http_proxy') or self.get_sys_env('all_proxy')
 
-    @staticmethod
-    def get_sys_proxy_enabled() -> bool:
+
+    def get_sys_proxy_enabled(self) -> bool:
         if OS == 'Windows':
-            res = Sysproxy.win_get_reg('ProxyEnable')
+            res = self.win_get_reg('ProxyEnable')
             if res is None: return False
-            return bool(res)        
+            return bool(res)
 
         # Linux doesn't have separate 'proxy enable' switch, so try to get 'http_proxy' ENV...
-        return (not Sysproxy.get_sys_http_proxy() is None)
+        return (not self.get_sys_http_proxy() is None)
 
-    @staticmethod
-    def get_sys_noproxy() -> Noproxy:
+
+    def get_sys_noproxy(self) -> Noproxy:
         if OS == 'Windows':
-            res = Sysproxy.win_get_reg('ProxyOverride')
+            res = self.win_get_reg('ProxyOverride')
             return None if res is None else Noproxy(True, None, res)
-        
-        res = Sysproxy.get_sys_env('no_proxy')
-        pers = Sysproxy.get_sys_persist('no_proxy')
+
+        res = self.get_sys_env('no_proxy')
+        pers = self.get_sys_persist('no_proxy')
         return None if res is None else Noproxy(pers, None, res)
 
-    @staticmethod
-    def get_sys_proxy_parsed(proxy='http_proxy') -> Proxyconf:
-        _proxy = Sysproxy.get_sys_http_proxy() if proxy == 'http_proxy' else Sysproxy.get_sys_env(proxy)
+
+    def get_sys_proxy_parsed(self, proxy='http_proxy') -> Proxyconf:
+        _proxy = self.get_sys_http_proxy() if proxy == 'http_proxy' else self.get_sys_env(proxy)
         if _proxy is None: return None
         spl = _proxy.split('://')
         prot = spl[0].lower() if len(spl) > 1 else 'http'
@@ -231,14 +350,14 @@ class Sysproxy:
         spl2 = other2.split(':')
         host = spl2[0]
         port = int(spl2[1]) if len(spl2) > 1 else None
-        return Proxyconf(Sysproxy.get_sys_persist(proxy), None, prot, host or '', port or 3128, not uname is None, uname or '', passw or '')
+        return Proxyconf(self.get_sys_persist(proxy), None, prot, host or '', port or 3128, not uname is None, uname or '', passw or '')
 
-    @staticmethod
-    def get_sys_persist(proxy='http_proxy') -> bool:
+
+    def get_sys_persist(self, proxy='http_proxy') -> bool:
         # there is no 'non-persistent' mode on Windows
         if OS == 'Windows':
             return True
-        # on UNIXes search these files (in succession): 
+        # on UNIXes search these files (in succession):
         # '~/.profile', '~/.bashrc', '~/.zshrc', '/etc/profile', '/etc/environment', '/etc/bash.bashrc', '/etc/zsh/zshrc'
         for fname in UNIX_PROFILE_FILES:
             if not os.path.isfile(fname):
@@ -253,34 +372,29 @@ class Sysproxy:
                 return m[2].strip() != ''
             except:
                 # traceback.print_exc()
-                continue 
+                continue
         return False
 
-    @staticmethod
-    def set_sys_persist(proxy: str, value: str, both_cases=True, unix_file='~/.profile'):
+
+    def set_sys_persist(self, proxy: str, value: str, unix_file='~/.profile'):
         # there is no 'non-persistent' mode on Windows
         if OS == 'Windows': return True
         try:
             with open(unix_file, 'a', encoding=utils.CODING) as f_:
-                if both_cases:
-                    for p_ in (proxy.lower(), proxy.upper()):
-                        f_.write(f'export {p_}={value}{utils.NL}')
-                        utils.log(f'Written {p_} to file {unix_file}', 'debug')
-                else:
-                    p_ = f'export {proxy}={value}{utils.NL}'
-                    f_.write(p_)
+                for p_ in (proxy.lower(), proxy.upper()):
+                    f_.write(f'export {p_}={value}{utils.NL}')
                     utils.log(f'Written {p_} to file {unix_file}', 'debug')
             return True
         except:
             traceback.print_exc()
             return False
 
-    @staticmethod
-    def del_sys_persist(proxy: str, both_cases=True, unix_files=None):
+
+    def del_sys_persist(self, proxy: str, unix_files=None):
         if OS == 'Windows': return
-        
+
         unix_files = unix_files or UNIX_PROFILE_FILES
-        reg = re.compile(REGEX_PROXY_EXPORT.format(proxy), flags=re.I if both_cases else 0)
+        reg = re.compile(REGEX_PROXY_EXPORT.format(proxy), flags=re.I)
 
         for fname in unix_files:
             try:
@@ -292,7 +406,7 @@ class Sysproxy:
                     continue
                 ftext = reg.sub('\n', ftext)
                 with open(fname, 'w', encoding=utils.CODING) as f_:
-                    f_.write(ftext) 
+                    f_.write(ftext)
                 utils.log(f'Deleted "{REGEX_PROXY_EXPORT.format(proxy)}" from file {fname}', 'debug')
 
             except:
@@ -301,7 +415,7 @@ class Sysproxy:
 
 # --------------------------------------------------------------- #
 
-class Proxy:    
+class Proxy:
 
     def __init__(self, storage_file='proxy_config.json', unix_file='~/.profile'):
         self.storage_file = utils.make_abspath(storage_file) if not os.path.isabs(storage_file) else storage_file
@@ -319,10 +433,10 @@ class Proxy:
             d[attr] = prop.asdict() if prop else None
         return d
 
-    def fromdict(self, dconfig: dict):      
+    def fromdict(self, dconfig: dict):
         for attr in ('http_proxy', 'https_proxy', 'ftp_proxy', 'rsync_proxy'):
             if not attr in dconfig: continue
-            obj = None if dconfig[attr] is None else Proxyconf(dconfig[attr]['persist'], self._on_setattr, dconfig[attr]['protocol'], dconfig[attr]['host'],  
+            obj = None if dconfig[attr] is None else Proxyconf(dconfig[attr]['persist'], self._on_setattr, dconfig[attr]['protocol'], dconfig[attr]['host'],
                                                                dconfig[attr]['port'], dconfig[attr]['auth'], dconfig[attr]['uname'], dconfig[attr]['password'])
             setattr(self, attr, obj)
         if 'noproxy' in dconfig:
@@ -384,7 +498,7 @@ class Proxy:
     def _on_setattr(self, obj, name, value):
         if isinstance(obj, Noproxy):
             if OS == 'Windows':
-                Sysproxy.win_set_reg('ProxyOverride', obj.getstr(True))       
+                Sysproxy.win_set_reg('ProxyOverride', obj.getstr(True))
             if obj:
                 Sysproxy.set_sys_env('no_proxy', obj.getstr(False))
             else:
@@ -413,15 +527,15 @@ class Proxy:
     @enabled.setter
     def enabled(self, is_enabled) -> bool:
         if is_enabled == self._enabled:
-            return        
+            return
         if not is_enabled:
             Sysproxy.unset_sys_env('http_proxy')
             Sysproxy.unset_sys_env('all_proxy')
         else:
-            proxy = self.http_proxy or self.https_proxy or self.ftp_proxy 
+            proxy = self.http_proxy or self.https_proxy or self.ftp_proxy
             if not proxy:
                 return
-            Sysproxy.set_sys_env('http_proxy', str(proxy)) 
+            Sysproxy.set_sys_env('http_proxy', str(proxy))
             # if OS == 'Windows':
             #     Sysproxy.win_set_reg('ProxyServer', f'{self.http_proxy.host}:{self.http_proxy.port}')
         if OS == 'Windows':
@@ -440,7 +554,7 @@ class Proxy:
         if (self._noproxy == value) or (self._noproxy.noproxies == value.noproxies and self._noproxy.persist == value.persist):
             return
         if OS == 'Windows':
-            Sysproxy.win_set_reg('ProxyOverride', value.getstr(True) if value else '')       
+            Sysproxy.win_set_reg('ProxyOverride', value.getstr(True) if value else '')
         if not value:
             Sysproxy.unset_sys_env('no_proxy')
         elif value.noproxies:
@@ -525,7 +639,7 @@ class Proxy:
             return self.ftp_proxy
         if proxy == 'rsync':
             return self.rsync_proxy
-        
+
     def copy_from(self, source='http', targets=['https', 'ftp', 'rsync']):
         src = self.proxy_by_name(source)
         if not src: return
@@ -545,14 +659,14 @@ class Proxy:
                 elif t == 'ftp':
                     self.ftp_proxy = src
                 elif t == 'rsync':
-                    self.rsync_proxy = src   
+                    self.rsync_proxy = src
 
     def save(self):
         self.stored = self.asdict()
 
     def restore(self):
         if not getattr(self, 'stored', None):
-            return        
+            return
         self.noproxy = self.stored['noproxy']
         self.http_proxy = self.stored['http_proxy']
         self.https_proxy = self.stored['https_proxy']

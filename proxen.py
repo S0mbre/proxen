@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
+
 import os, sys, traceback
-# import argparse
-from qtimports import QtCore
+import utils
+from qtimports import QtCore, QtWidgets
 
 # ======================================================================================= #
 
 def main():
 
-    from gui import MainWindow
+    from gui import MainWindow, TestEnv
     
     try:        
         # change working dir to current for correct calls to git
@@ -17,9 +18,9 @@ def main():
         # disable Qt debug messages
         QtCore.qInstallMessageHandler(lambda msg_type, msg_log_context, msg_string: None)
         # create QApplication instance
-        app = MainWindow.get_app(sys.argv)
+        app = QtWidgets.QApplication(sys.argv)
         # create main window (passing all found command-line args)
-        mw = MainWindow()
+        mw = TestEnv() #MainWindow()
         mw.show()
         # run app's event loop
         sys.exit(app.exec())

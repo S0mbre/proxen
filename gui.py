@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 import os, json
+import re
+from PySide6.QtGui import QTextDocumentWriter
+
+from PySide6.QtWidgets import QWidget
 
 from qtimports import *
 import utils
-from sysproxy import Sysproxy, Proxy, OS, Proxyconf, Noproxy
+import sysproxy
 
 # ******************************************************************************** #
 
@@ -160,7 +164,7 @@ class MainWindow(BasicDialog):
             return QtWidgets.QApplication(args)
 
     def __init__(self):
-        self.sysproxy = Proxy()
+        self.sysproxy = sysproxy.Proxy()
         self.localproxy = self.sysproxy.asdict()
         rec = QtGui.QGuiApplication.primaryScreen().geometry()
         super().__init__(title='Proxen!', icon='proxen.png', geometry=(rec.width() // 2 - 175, rec.height() // 2 - 125, 350, 550),
@@ -386,8 +390,8 @@ class MainWindow(BasicDialog):
 
         # main toggles
         self.act_enable_proxy.setChecked(self.localproxy['enabled'])
-        self.act_persist_proxy.setChecked(OS == 'Windows' or (self.localproxy['http_proxy'] and self.localproxy['http_proxy']['persist']))
-        self.act_persist_proxy.setEnabled(OS != 'Windows')
+        self.act_persist_proxy.setChecked(sysproxy.OS == 'Windows' or (self.localproxy['http_proxy'] and self.localproxy['http_proxy']['persist']))
+        self.act_persist_proxy.setEnabled(sysproxy.OS != 'Windows')
 
         # settings
         self.on_btns_protocol_selected(0, True)
@@ -523,7 +527,7 @@ class MainWindow(BasicDialog):
             self.localproxy[proxy] = None
         else:
             sysproxy_obj = getattr(self.sysproxy, proxy, None)
-            self.localproxy[proxy] = sysproxy_obj.asdict().copy() if sysproxy_obj else Proxyconf().asdict().copy()
+            self.localproxy[proxy] = sysproxy_obj.asdict().copy() if sysproxy_obj else sysproxy.Proxyconf().asdict().copy()
         self.settings_to_gui()
 
     @Slot(bool)
@@ -557,3 +561,141 @@ class MainWindow(BasicDialog):
         else:
             self.localproxy['noproxy'] = None
         self.update_actions_enabled()
+
+# ******************************************************************************** #
+# *****          TestEnv
+# ******************************************************************************** # 
+
+class TestEnv(BasicDialog):
+
+    def __init__(self):
+        super().__init__(title='SysEnv', icon='settings.png')
+
+    def addMainLayout(self):
+        self.layout_controls = QtWidgets.QHBoxLayout()
+
+        self.tw_envs = QtWidgets.QTableWidget(0, 3)
+        self.tw_envs.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.tw_envs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.tw_envs.setSortingEnabled(True)
+        self.tw_envs.itemSelectionChanged.connect(self.update_actions)
+        self.tw_envs.itemChanged.connect(self.tw_itemChanged)
+        self.tw_envs.setHorizontalHeaderLabels(['Variable', 'Domain', 'Value'])
+        self.tw_envs.horizontalHeader().setStretchLastSection(True)
+        self.layout_controls.addWidget(self.tw_envs)
+
+        self.tbar = QtWidgets.QToolBar()
+        self.tbar.setOrientation(QtCore.Qt.Vertical)
+        self.tbar.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        self.tbar.setFixedWidth(100)
+
+        self.act_refresh = QAction(QtGui.QIcon("resources/repeat.png"), 'Refresh')
+        self.act_refresh.setShortcut(QtGui.QKeySequence.Refresh)
+        self.act_refresh.setToolTip('Refresh system env variables')
+        self.act_refresh.triggered.connect(self.on_act_refresh)
+        self.tbar.addAction(self.act_refresh)
+        
+        self.act_add = QAction(QtGui.QIcon("resources/add.png"), 'Add')
+        self.act_add.setShortcut(QtGui.QKeySequence.New)
+        self.act_add.setToolTip('Add variable')
+        self.act_add.triggered.connect(self.on_act_add)
+        self.tbar.addAction(self.act_add)
+
+        self.act_delete = QAction(QtGui.QIcon("resources/error.png"), 'Unset')
+        self.act_delete.setShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Delete))
+        self.act_delete.setToolTip('Delete variables')
+        self.act_delete.triggered.connect(self.on_act_delete)
+        self.tbar.addAction(self.act_delete)
+
+        self.layout_controls.addWidget(self.tbar)
+
+    def showEvent(self, event):
+        # show
+        event.accept()
+        # fill vars
+        self.on_act_refresh(False)    
+
+    # ============================================= SLOTS ================================================================ #
+
+    @Slot()
+    def update_actions(self):
+        cnt_sel = len(self.tw_envs.selectedItems())
+        self.act_delete.setEnabled(cnt_sel > 2)
+
+    @Slot(bool)
+    def on_act_refresh(self, checked):
+        d_envs = sysproxy.Sysproxy.list_sys_envs(True)
+        if not d_envs: return
+        
+        try:
+            self.tw_envs.itemSelectionChanged.disconnect()
+            self.tw_envs.itemChanged.disconnect()
+        except:
+            pass
+
+        self.tw_envs.setSortingEnabled(False)
+        self.tw_envs.clearContents()
+        self.tw_envs.setRowCount(len(d_envs['user']) + len(d_envs['system']))
+        self.tw_envs.setMinimumSize(300, 300)
+
+        i = 0
+        for k in d_envs:
+            for env_name in d_envs[k]:                
+                item0 = QtWidgets.QTableWidgetItem(env_name)               
+                item1 = QtWidgets.QTableWidgetItem(k)
+                item2 = QtWidgets.QTableWidgetItem(str(d_envs[k][env_name][0]))
+
+                flags = QtCore.Qt.ItemIsEnabled
+                if k == 'user' or sysproxy.CURRENT_USER[1]:
+                    flags1 = flags | QtCore.Qt.ItemIsSelectable
+                    flags2 = flags1 | QtCore.Qt.ItemIsEditable
+                else:
+                    flags1 = flags
+                    flags2 = flags
+                    item2.setForeground(QtGui.QBrush(QtCore.Qt.gray))
+
+                item0.setFlags(flags1)
+                item1.setFlags(flags1)
+                item2.setFlags(flags2)
+
+                self.tw_envs.setItem(i, 0, item0)
+                self.tw_envs.setItem(i, 1, item1)
+                self.tw_envs.setItem(i, 2, item2)
+                i += 1
+
+        self.tw_envs.setSortingEnabled(True)
+        self.tw_envs.sortByColumn(1, QtCore.Qt.SortOrder.AscendingOrder)
+
+        self.tw_envs.itemSelectionChanged.connect(self.update_actions)
+        self.tw_envs.itemChanged.connect(self.tw_itemChanged)
+
+        self.update_actions()
+
+    @Slot(bool)
+    def on_act_add(self, checked):
+        pass
+
+    @Slot(bool)
+    def on_act_delete(self, checked):
+        selitems = self.tw_envs.selectedItems()
+        if len(selitems) < 2: return
+        for item in selitems:
+            if item.column() != 0: continue
+            su = self.tw_envs.item(item.row(), 1).text() == 'system'
+            if su and not sysproxy.CURRENT_USER[1]: 
+                QtWidgets.QMessageBox.warning(self, 'Warning', 'Cannot unset variable without SU privilege!')
+                return
+            sysproxy.Sysproxy.unset_sys_env(item.text(), superuser=su)
+        self.on_act_refresh(False)
+
+    @Slot(QtWidgets.QTableWidgetItem)
+    def tw_itemChanged(self, item: QtWidgets.QTableWidgetItem):
+        if item.column() != 2: return
+        env = self.tw_envs.item(item.row(), 0).text()
+        txt = item.text()
+        su = self.tw_envs.item(item.row(), 1).text() == 'system'
+        if su and not sysproxy.CURRENT_USER[1]:
+            QtWidgets.QMessageBox.warning(self, 'Warning', 'Cannot edit variable without SU privilege!')
+            return
+        sysproxy.Sysproxy.set_sys_env(env, txt, create=False, superuser=su)
+        self.on_act_refresh(False)
