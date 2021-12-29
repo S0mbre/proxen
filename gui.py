@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 import os, json
-import re
-from PySide6.QtGui import QTextDocumentWriter
-
-from PySide6.QtWidgets import QWidget
-
+import traceback
 from qtimports import *
 import utils
 import sysproxy
@@ -12,6 +8,68 @@ import sysproxy
 # ******************************************************************************** #
 
 PROXY_OBJS = ['http_proxy', 'https_proxy', 'ftp_proxy', 'rsync_proxy', 'noproxy']
+
+# ******************************************************************************** #
+# *****          QThreadStump
+# ******************************************************************************** #
+
+class QThreadStump(QtCore.QThread):
+
+    ## Error signal (args are: instance of this thread and the error message)
+    sig_error = Signal(QtCore.QThread, str)
+
+    def __init__(self, default_priority=QtCore.QThread.NormalPriority,
+                 on_start=None, on_finish=None, on_run=None, on_error=None,
+                 start_signal=None, stop_signal=None,
+                 free_on_finish=False, start_now=False, can_terminate=True):
+        super().__init__()
+        self.init(default_priority, on_start, on_finish, on_run, on_error,
+                  start_signal, stop_signal, free_on_finish, can_terminate)
+        if start_now: self.start()
+
+    def __del__(self):
+        try:
+            self.wait()
+        except:
+            pass
+
+    def init(self, default_priority=QtCore.QThread.NormalPriority,
+             on_start=None, on_finish=None, on_run=None, on_error=None,
+             start_signal=None, stop_signal=None,
+             free_on_finish=False, can_terminate=True):
+        try:
+            self.started.disconnect()
+            self.finished.disconnect()
+            self.sig_error.disconnect()
+        except:
+            pass
+
+        self.setTerminationEnabled(can_terminate)
+        if on_start: self.started.connect(on_start)
+        if on_finish: self.finished.connect(on_finish)
+        if free_on_finish: self.finished.connect(self.deleteLater)
+        if start_signal: start_signal.connect(self.start)
+        if stop_signal: stop_signal.connect(self.terminate)
+        if on_error: self.sig_error.connect(on_error)
+        self.default_priority = default_priority if default_priority != QtCore.QThread.InheritPriority else QtCore.QThread.NormalPriority
+        self.on_run = on_run
+        self.mutex = QtCore.QMutex()
+
+    def lock(self):
+        self.mutex.lock()
+
+    def unlock(self):
+        self.mutex.unlock()
+
+    ## Executes the worker function pointed to by QThreadStump::on_run.
+    def run(self):
+        self.setPriority(self.default_priority)
+        if self.on_run and not self.isInterruptionRequested():
+            try:
+                self.on_run()
+            except Exception as err:
+                traceback.print_exc(limit=None)
+                self.sig_error.emit(self, str(err))
 
 # ******************************************************************************** #
 # *****          BrowseEdit
@@ -566,9 +624,30 @@ class MainWindow(BasicDialog):
 # *****          TestEnv
 # ******************************************************************************** # 
 
+class TestEnvEditor(BasicDialog):
+    def __init__(self):
+        super().__init__(title='New', icon='add.png')
+
+    def addMainLayout(self):
+        self.layout_controls = QtWidgets.QFormLayout()
+
+        self.le_name = QtWidgets.QLineEdit('')
+        self.le_value = QtWidgets.QLineEdit('')
+        self.cb_type = QtWidgets.QComboBox()
+        self.cb_type.setEditable(False)
+        self.cb_type.addItems(['String', 'Number', 'Blob', 'String with macros'])
+        self.cb_type.setCurrentIndex(0)
+
+        self.layout_controls.addRow('Name', self.le_name)
+        self.layout_controls.addRow('Value', self.le_value)
+        self.layout_controls.addRow('Type', self.cb_type)
+
 class TestEnv(BasicDialog):
 
     def __init__(self):
+        self.sysproxy = sysproxy.Sysproxy(False)
+        self.thread_update = QThreadStump(on_run=self.sysproxy.update_vars, on_finish=self.on_update_finish,
+                                          on_error=self.on_update_finish)
         super().__init__(title='SysEnv', icon='settings.png')
 
     def addMainLayout(self):
@@ -613,20 +692,15 @@ class TestEnv(BasicDialog):
         # show
         event.accept()
         # fill vars
-        self.on_act_refresh(False)    
+        self.on_act_refresh(False)
 
-    # ============================================= SLOTS ================================================================ #
+    def closeEvent(self, event):
+        if self.thread_update.isRunning():
+            self.thread_update.terminate()
+            self.thread_update.wait()
+        event.accept()
 
-    @Slot()
-    def update_actions(self):
-        cnt_sel = len(self.tw_envs.selectedItems())
-        self.act_delete.setEnabled(cnt_sel > 2)
-
-    @Slot(bool)
-    def on_act_refresh(self, checked):
-        d_envs = sysproxy.Sysproxy.list_sys_envs(True)
-        if not d_envs: return
-        
+    def on_update_finish(self):
         try:
             self.tw_envs.itemSelectionChanged.disconnect()
             self.tw_envs.itemChanged.disconnect()
@@ -635,18 +709,18 @@ class TestEnv(BasicDialog):
 
         self.tw_envs.setSortingEnabled(False)
         self.tw_envs.clearContents()
-        self.tw_envs.setRowCount(len(d_envs['user']) + len(d_envs['system']))
+        self.tw_envs.setRowCount(len(self.sysproxy.locals) + len(self.sysproxy.globals))
         self.tw_envs.setMinimumSize(300, 300)
 
         i = 0
-        for k in d_envs:
-            for env_name in d_envs[k]:                
+        for k, lst_envs in enumerate((self.sysproxy.locals, self.sysproxy.globals)):
+            for env_name in lst_envs:                
                 item0 = QtWidgets.QTableWidgetItem(env_name)               
-                item1 = QtWidgets.QTableWidgetItem(k)
-                item2 = QtWidgets.QTableWidgetItem(str(d_envs[k][env_name][0]))
+                item1 = QtWidgets.QTableWidgetItem('user' if k == 0 else 'system')
+                item2 = QtWidgets.QTableWidgetItem(str(lst_envs[env_name][0]))
 
                 flags = QtCore.Qt.ItemIsEnabled
-                if k == 'user' or sysproxy.CURRENT_USER[1]:
+                if k == 0 or sysproxy.CURRENT_USER[1]:
                     flags1 = flags | QtCore.Qt.ItemIsSelectable
                     flags2 = flags1 | QtCore.Qt.ItemIsEditable
                 else:
@@ -664,17 +738,37 @@ class TestEnv(BasicDialog):
                 i += 1
 
         self.tw_envs.setSortingEnabled(True)
-        self.tw_envs.sortByColumn(1, QtCore.Qt.SortOrder.AscendingOrder)
+        self.tw_envs.sortByColumn(0, QtCore.Qt.SortOrder.AscendingOrder)
 
         self.tw_envs.itemSelectionChanged.connect(self.update_actions)
         self.tw_envs.itemChanged.connect(self.tw_itemChanged)
 
         self.update_actions()
 
+    # ============================================= SLOTS ================================================================ #
+
+    @Slot()
+    def update_actions(self):
+        cnt_sel = len(self.tw_envs.selectedItems())
+        update_running = self.thread_update.isRunning()
+        self.act_delete.setEnabled(not update_running and cnt_sel > 2)
+        self.act_refresh.setEnabled(not update_running)
+        self.act_add.setEnabled(not update_running)
+
+    @Slot(bool)
+    def on_act_refresh(self, checked):
+        if not self.act_refresh.isEnabled() or self.thread_update.isRunning():
+            return
+        self.thread_update.start()
+        self.update_actions()
+
     @Slot(bool)
     def on_act_add(self, checked):
-        pass
-
+        new_var_dlg = TestEnvEditor()
+        if not new_var_dlg.exec():
+            return
+        
+        
     @Slot(bool)
     def on_act_delete(self, checked):
         selitems = self.tw_envs.selectedItems()
@@ -685,7 +779,7 @@ class TestEnv(BasicDialog):
             if su and not sysproxy.CURRENT_USER[1]: 
                 QtWidgets.QMessageBox.warning(self, 'Warning', 'Cannot unset variable without SU privilege!')
                 return
-            sysproxy.Sysproxy.unset_sys_env(item.text(), superuser=su)
+            self.sysproxy.unset_sys_env(item.text(), ('user',) if not su else ('user', 'system'), False)
         self.on_act_refresh(False)
 
     @Slot(QtWidgets.QTableWidgetItem)
@@ -697,5 +791,5 @@ class TestEnv(BasicDialog):
         if su and not sysproxy.CURRENT_USER[1]:
             QtWidgets.QMessageBox.warning(self, 'Warning', 'Cannot edit variable without SU privilege!')
             return
-        sysproxy.Sysproxy.set_sys_env(env, txt, create=False, superuser=su)
+        self.sysproxy.set_sys_env(env, txt, ('user',) if not su else ('user', 'system'), False)
         self.on_act_refresh(False)

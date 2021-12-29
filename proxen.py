@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import os, sys, traceback
-import utils
 from qtimports import QtCore, QtWidgets
 
 # ======================================================================================= #
@@ -20,7 +19,8 @@ def main():
         # create QApplication instance
         app = QtWidgets.QApplication(sys.argv)
         # create main window (passing all found command-line args)
-        mw = TestEnv() #MainWindow()
+        # mw = MainWindow()
+        mw = TestEnv()
         mw.show()
         # run app's event loop
         sys.exit(app.exec())
