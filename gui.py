@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os, json
+import os, json, struct
 import traceback
 from qtimports import *
 import utils
@@ -624,9 +624,46 @@ class MainWindow(BasicDialog):
 # *****          TestEnv
 # ******************************************************************************** # 
 
+class TestEnvEditorAsk(BasicDialog):
+    def __init__(self):
+        super().__init__(title='Interpret value as...', icon='info.png')
+
+    def addMainLayout(self):
+        self.layout_controls = QtWidgets.QVBoxLayout()
+
+        self.btns = QtWidgets.QButtonGroup()
+        self.lo_btns = QtWidgets.QHBoxLayout()
+        for i, t in enumerate(['Hex data', 'UTF-8 string', 'ASCII string']):
+            rb = QtWidgets.QRadioButton(t) # e.g. de ad be ef 00 | DEADBEEF00
+            if i == 0:
+                rb.setChecked(True)
+            self.btns.addButton(rb, i)
+            self.lo_btns.addWidget(rb)
+        self.btns.idToggled.connect(self.on_btns_selected)
+        self.layout_controls.addLayout(self.lo_btns)
+
+        self.te_notes = QtWidgets.QPlainTextEdit()
+        self.te_notes.setReadOnly(True)
+        self.layout_controls.addWidget(self.te_notes)
+
+        self.on_btns_selected(0, True)
+
+    @Slot(int, bool)
+    def on_btns_selected(self, index, checked):
+        if not checked: return
+        txt = ''
+        if index == 0:
+            txt = 'Hex bytes, e.g. "de ad be ef 00" or "DEADBEEF00"'
+        elif index == 1:
+            txt = 'Unicode (UTF-8) string (will be converted to bytes)'
+        elif index == 2:
+            txt = 'ASCII string (will be converted to bytes)'
+        self.te_notes.setPlainText(txt)
+
 class TestEnvEditor(BasicDialog):
     def __init__(self):
         super().__init__(title='New', icon='add.png')
+        self.strdata_mode = None
 
     def addMainLayout(self):
         self.layout_controls = QtWidgets.QFormLayout()
@@ -634,20 +671,47 @@ class TestEnvEditor(BasicDialog):
         self.le_name = QtWidgets.QLineEdit('')
         self.le_value = QtWidgets.QLineEdit('')
         self.cb_type = QtWidgets.QComboBox()
-        self.cb_type.setEditable(False)
-        self.cb_type.addItems(['String', 'Number', 'Blob', 'String with macros'])
+        self.cb_type.setEditable(False)        
+        cb_data = [('String', 'string'), ('Number', 'number'), ('Blob', 'binary'), ('String with macros', 'macro')]
+        for d in cb_data:
+            self.cb_type.addItem(d[0], d[1])
         self.cb_type.setCurrentIndex(0)
+        self.cb_type.currentIndexChanged.connect(self.on_cb_type)
+        self.chb_user = QtWidgets.QCheckBox('')
+        self.chb_user.setChecked(True)
+        self.chb_system = QtWidgets.QCheckBox('')
+        self.chb_system.setChecked(False)
+        self.chb_system.setEnabled(sysproxy.CURRENT_USER[1])
+        self.lo_chb = QtWidgets.QHBoxLayout()
+        self.lo_chb.addWidget(self.chb_user)
+        self.lo_chb.addWidget(self.chb_system)
 
         self.layout_controls.addRow('Name', self.le_name)
         self.layout_controls.addRow('Value', self.le_value)
         self.layout_controls.addRow('Type', self.cb_type)
+        self.layout_controls.addRow('Namespaces', self.lo_chb)
+
+    def validate(self):
+        return self.le_name.text().strip() != '' and self.le_value.text().strip() != '' and \
+               (self.chb_user.isChecked() or self.chb_system.isChecked())
+
+    @Slot(int)
+    def on_cb_type(self, index):
+        if index == 2:
+            dlg = TestEnvEditorAsk()
+            if dlg.exec():
+                self.strdata_mode = dlg.btns.checkedId()
+            else:
+                self.strdata_mode = 0
 
 class TestEnv(BasicDialog):
 
     def __init__(self):
         self.sysproxy = sysproxy.Sysproxy(False)
-        self.thread_update = QThreadStump(on_run=self.sysproxy.update_vars, on_finish=self.on_update_finish,
-                                          on_error=self.on_update_finish)
+        self.thread_update = QThreadStump(on_run=self.sysproxy.update_vars, on_start=self.update_actions,
+                                          on_finish=self.update_envlist, on_error=self.update_envlist)
+        self.thread_action = QThreadStump(on_run=None, on_start=self.update_actions,
+                                          on_finish=self.refresh_vars_gui, on_error=self.refresh_vars_gui)
         super().__init__(title='SysEnv', icon='settings.png')
 
     def addMainLayout(self):
@@ -695,12 +759,15 @@ class TestEnv(BasicDialog):
         self.on_act_refresh(False)
 
     def closeEvent(self, event):
+        if self.thread_action.isRunning():
+            self.thread_action.terminate()
+            self.thread_action.wait()
         if self.thread_update.isRunning():
             self.thread_update.terminate()
             self.thread_update.wait()
         event.accept()
 
-    def on_update_finish(self):
+    def update_envlist(self):
         try:
             self.tw_envs.itemSelectionChanged.disconnect()
             self.tw_envs.itemChanged.disconnect()
@@ -717,7 +784,14 @@ class TestEnv(BasicDialog):
             for env_name in lst_envs:                
                 item0 = QtWidgets.QTableWidgetItem(env_name)               
                 item1 = QtWidgets.QTableWidgetItem('user' if k == 0 else 'system')
-                item2 = QtWidgets.QTableWidgetItem(str(lst_envs[env_name][0]))
+                val = lst_envs[env_name][0]
+                if isinstance(val, str):
+                    sval = val
+                elif isinstance(val, bytes):
+                    sval = " ".join(["{:02x}".format(x) for x in bytearray(val)])
+                else:
+                    sval = str(val)
+                item2 = QtWidgets.QTableWidgetItem(sval)
 
                 flags = QtCore.Qt.ItemIsEnabled
                 if k == 0 or sysproxy.CURRENT_USER[1]:
@@ -745,51 +819,125 @@ class TestEnv(BasicDialog):
 
         self.update_actions()
 
+    def refresh_vars_gui(self):
+        if self.thread_update.isRunning():
+            return
+        while self.thread_action.isRunning():
+            self.thread_action.wait()
+        self.thread_update.start()
+
+    def unset_vars(self, varnames):
+        # varnames: list of 2-tuples: [('env', 'user'), ('env', 'system'), ...]
+        def do_unser_vars():
+            for var in varnames:
+                modes = ['user']
+                if var[1] == 'system':
+                    modes.append('system')
+                self.sysproxy.unset_sys_env(var[0], modes, False)
+        return do_unser_vars
+
+    def set_var(self, varname, value, modes=('user',)):
+        def do_set_var():
+            self.sysproxy.set_sys_env(varname, value, modes, False)
+        return do_set_var
+
+    def create_var(self, varname, value, valtype, modes=('user',)):
+        def do_create_var():
+            self.sysproxy.set_sys_env(varname, value, True, valtype, modes, False)
+        return do_create_var
+
     # ============================================= SLOTS ================================================================ #
 
     @Slot()
     def update_actions(self):
         cnt_sel = len(self.tw_envs.selectedItems())
-        update_running = self.thread_update.isRunning()
-        self.act_delete.setEnabled(not update_running and cnt_sel > 2)
-        self.act_refresh.setEnabled(not update_running)
-        self.act_add.setEnabled(not update_running)
+        running = self.thread_update.isRunning() or self.thread_action.isRunning()
+        self.act_delete.setEnabled(not running and cnt_sel > 2)
+        self.act_refresh.setEnabled(not running)
+        self.act_add.setEnabled(not running)
 
     @Slot(bool)
     def on_act_refresh(self, checked):
-        if not self.act_refresh.isEnabled() or self.thread_update.isRunning():
-            return
-        self.thread_update.start()
-        self.update_actions()
+        self.refresh_vars_gui()
 
     @Slot(bool)
     def on_act_add(self, checked):
+        while self.thread_update.isRunning() or self.thread_action.isRunning():
+            self.thread_update.wait()
+            self.thread_action.wait()
+
         new_var_dlg = TestEnvEditor()
         if not new_var_dlg.exec():
             return
-        
+        env = new_var_dlg.le_name.text().strip()
+        val = new_var_dlg.le_value.text()
+        valtype =  new_var_dlg.cb_type.currentData()
+
+        if valtype == 'binary':
+            if new_var_dlg.strdata_mode == 1:
+                val = val.encode(utils.CODING)
+            elif new_var_dlg.strdata_mode == 2:
+                val = val.encode('ascii')
+            else:
+                val = bytes.fromhex(val)
+        elif valtype == 'number':
+            try:
+                val = int(val)
+            except:
+                try:
+                    val = bytes(struct.unpack('!I', struct.pack('!f', val))[0])
+                    valtype = 'binary'
+                except:
+                    val = 0
+
+        modes = []
+        if new_var_dlg.chb_user.isChecked():
+            modes.append('user')
+        if new_var_dlg.chb_system.isChecked():
+            modes.append('system')
+
+        if not modes: return
+
+        self.thread_action.on_run = self.create_var(env, val, valtype, modes)
+        self.thread_action.start()
         
     @Slot(bool)
     def on_act_delete(self, checked):
         selitems = self.tw_envs.selectedItems()
-        if len(selitems) < 2: return
+        if len(selitems) < 2 or self.thread_update.isRunning(): 
+            return
+
+        while self.thread_action.isRunning():
+            self.thread_action.wait()
+
+        warned = False
+        envs_to_unset = []
         for item in selitems:
             if item.column() != 0: continue
-            su = self.tw_envs.item(item.row(), 1).text() == 'system'
-            if su and not sysproxy.CURRENT_USER[1]: 
-                QtWidgets.QMessageBox.warning(self, 'Warning', 'Cannot unset variable without SU privilege!')
-                return
-            self.sysproxy.unset_sys_env(item.text(), ('user',) if not su else ('user', 'system'), False)
-        self.on_act_refresh(False)
+            envmode = self.tw_envs.item(item.row(), 1).text()
+            if envmode == 'system' and not sysproxy.CURRENT_USER[1]: 
+                if not warned:
+                    QtWidgets.QMessageBox.warning(self, 'Warning', 'Cannot unset variable without SU privilege!')
+                continue
+            envs_to_unset.append((item.text(), envmode))
+        
+        if not envs_to_unset: return
+
+        self.thread_action.on_run = self.unset_vars(envs_to_unset)
+        self.thread_action.start()
 
     @Slot(QtWidgets.QTableWidgetItem)
     def tw_itemChanged(self, item: QtWidgets.QTableWidgetItem):
-        if item.column() != 2: return
-        env = self.tw_envs.item(item.row(), 0).text()
-        txt = item.text()
-        su = self.tw_envs.item(item.row(), 1).text() == 'system'
-        if su and not sysproxy.CURRENT_USER[1]:
-            QtWidgets.QMessageBox.warning(self, 'Warning', 'Cannot edit variable without SU privilege!')
+        if item.column() != 2 or self.thread_update.isRunning(): 
             return
-        self.sysproxy.set_sys_env(env, txt, ('user',) if not su else ('user', 'system'), False)
-        self.on_act_refresh(False)
+
+        while self.thread_action.isRunning():
+            self.thread_action.wait()
+
+        env = self.tw_envs.item(item.row(), 0).text()
+        val = item.text()
+        envmode = self.tw_envs.item(item.row(), 1).text()
+
+        self.thread_action.on_run = self.set_var(env, val, (envmode,))
+        self.thread_action.start()
+        

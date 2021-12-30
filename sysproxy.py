@@ -125,9 +125,7 @@ class Sysproxy:
     def update_vars(self):
         self.locals = {}
         self.globals = {}
-        if OS == 'Windows':
-            # propagate env vars by calling setx
-            subprocess.run(f'setx ttt t > nul', shell=True)
+        if OS == 'Windows':            
             self.locals = self.win_list_reg(WIN_ENV_LOCAL_KEY) or {}
             self.globals = self.win_list_reg(WIN_ENV_SYSTEM_KEY, 'HKLM') or {}
         else:
@@ -260,11 +258,24 @@ class Sysproxy:
         res = None
         try:
             k = winreg.OpenKeyEx(branch, keyname, 0, winreg.KEY_ALL_ACCESS)
-            val = winreg.QueryValueEx(k, valname)
-            if val[0] != value:
-                winreg.SetValueEx(k, valname, 0, val[1], value)
-            res = winreg.QueryValueEx(k, valname)
-            utils.log(f'Set win reg key {keyname}\\{valname} to {value} = {res[0]}', 'debug')
+            try:
+                val = winreg.QueryValueEx(k, valname)
+            except:
+                utils.log(f'Unable to set win reg key {keyname}\\{valname} (value does not exist!)', 'debug')
+                res = None
+            else:
+                if isinstance(value, str) and not val[1] in (winreg.REG_SZ, winreg.REG_EXPAND_SZ):
+                    # need convert...
+                    if val[1] == winreg.REG_BINARY:
+                        value = bytes.fromhex(value)
+                    elif val[1] == winreg.REG_DWORD:
+                        value = int(value)
+                if val[0] != value:
+                    winreg.SetValueEx(k, valname, 0, val[1], value)
+                res = winreg.QueryValueEx(k, valname)                
+                # propagate env vars by calling setx
+                subprocess.run(f'setx ttt t > nul', shell=True)
+                utils.log(f'Set win reg key {keyname}\\{valname} to {value} = {res[0]}', 'debug')
         except:
             traceback.print_exc()
             utils.log(f'Error setting win reg key {keyname}\\{valname} to {value}', 'debug')
@@ -273,6 +284,12 @@ class Sysproxy:
         return res
 
     def win_create_reg(self, keyname, valname, value, valtype=None, branch='HKEY_CURRENT_USER') -> tuple[str, int]:
+        if OS != 'Windows':
+            raise Exception('This method is available only on Windows platforms!')
+        if isinstance(branch, str):
+            branch = WIN_REG_BRANCHES[branch]
+        if keyname == WIN_ENV_LOCAL_KEY and valname == WIN_DUMMY_KEYNAME:
+            return None
         if not valtype:
             if isinstance(value, str):
                 if re.match(r'%(.+?)%', value, re.I):
@@ -293,21 +310,30 @@ class Sysproxy:
             elif valtype == 'macro':
                 valtype = winreg.REG_EXPAND_SZ
             else:
-                valtype = winreg.REG_SZ
-        if keyname == WIN_ENV_LOCAL_KEY and valname == WIN_DUMMY_KEYNAME:
-            return ('t', winreg.REG_SZ)
+                valtype = winreg.REG_SZ       
+        if isinstance(value, str) and not valtype in (winreg.REG_SZ, winreg.REG_EXPAND_SZ):
+            # need convert...
+            if valtype == winreg.REG_BINARY:
+                value = bytes.fromhex(value)
+            elif valtype == winreg.REG_DWORD:
+                value = int(value) 
         k = None
         res = None
         try:
             k = winreg.OpenKeyEx(branch, keyname, 0, winreg.KEY_ALL_ACCESS)
-            val = winreg.QueryValueEx(k, valname)
-            if val[0] != value:
-                winreg.SetValueEx(k, valname, 0, val[1], value)
-            res = winreg.QueryValueEx(k, valname)
-            utils.log(f'Set win reg key {keyname}\\{valname} to {value} = {res[0]}', 'debug')
+            try:
+                res = winreg.QueryValueEx(k, valname)
+                utils.log(f'Failed to create win reg key {keyname}\\{valname} (already exists!)', 'debug')
+                res = None
+            except FileNotFoundError:
+                winreg.SetValueEx(k, valname, 0, valtype, value)
+                res = winreg.QueryValueEx(k, valname)
+                # propagate env vars by calling setx
+                subprocess.run(f'setx ttt t > nul', shell=True)
+                utils.log(f'Created win reg key {keyname}\\{valname} = {res[0]}', 'debug')
         except:
             traceback.print_exc()
-            utils.log(f'Error setting win reg key {keyname}\\{valname} to {value}', 'debug')
+            utils.log(f'Error creating win reg key {keyname}\\{valname} = {value}', 'debug')
         finally:
             if k: winreg.CloseKey(k)
         return res
@@ -322,6 +348,8 @@ class Sysproxy:
         try:
             k = winreg.OpenKeyEx(branch, keyname, 0, winreg.KEY_ALL_ACCESS)
             winreg.DeleteValue(k, valname)
+            # propagate env vars by calling setx
+            subprocess.run(f'setx ttt t > nul', shell=True)
             utils.log(f'Deleted win reg key {keyname}\\{valname}', 'debug')
             res = True
         except:
@@ -347,9 +375,9 @@ class Sysproxy:
                     val = winreg.EnumValue(k, i)
                     if val[0] == WIN_DUMMY_KEYNAME:
                         continue
-                    if not expand_vars:
+                    if not expand_vars or not isinstance(val[1], str):
                         res[val[0]] = val[1:]
-                    else:
+                    else:                        
                         v = reg.sub(lambda m: os.environ.get(m[1], m[0]), val[1])
                         res[val[0]] = (v, val[2])
                 except OSError:
@@ -377,22 +405,38 @@ class Sysproxy:
         return {'user': self.get_env(envname, False, ('user',), default),
                 'system': self.get_env(envname, False, ('system',), default)}
 
-    def set_sys_env(self, envname: str, value, modes=('user',), update_vars=True) -> bool:
+    def set_sys_env(self, envname: str, value, create=True, valtype=None, modes=('user',), update_vars=True) -> bool:
         if ('system' in modes) and (not CURRENT_USER[1]):
             raise Exception('Cannot execute command: SU privilege asked!')
         res = False
+        env = self.get_sys_env(envname)
         if OS == 'Windows':
             res = []
             for mode in modes:
                 try:          
                     if mode == 'user':
-                        res.append(self.win_set_reg(WIN_ENV_LOCAL_KEY, envname, value, 'HKCU'))
+                        if not create or env['user']:
+                            res.append(self.win_set_reg(WIN_ENV_LOCAL_KEY, envname, value, 'HKCU'))
+                        else:
+                            res.append(self.win_create_reg(WIN_ENV_LOCAL_KEY, envname, value, valtype, 'HKCU'))
                     elif mode == 'system':
-                        res.append(self.win_set_reg(WIN_ENV_SYSTEM_KEY, envname, value, 'HKLM'))
+                        if not create or env['system']:
+                            res.append(self.win_set_reg(WIN_ENV_SYSTEM_KEY, envname, value, 'HKLM'))
+                        else:
+                            res.append(self.win_create_reg(WIN_ENV_SYSTEM_KEY, envname, value, valtype, 'HKLM'))
                 except:
-                    res.append(False)        
+                    res.append(False)   
+            res = all(res)            
         else:
-            res = self.unix_write_env(self.unix_file, envname, value)
+            if create or ('user' in modes and env['user']) or ('system' in modes and env['system']):
+                res = self.unix_write_env(self.unix_file, envname, value)
+            else:
+                res = None
+        
+        if res and isinstance(value, str):
+            for e_ in {envname, envname.lower(), envname.upper()}:
+                os.environ[e_] = value
+        
         if update_vars: self.update_vars()        
         utils.log(f'Set system env {envname} = {value}', 'debug')
         return res
@@ -414,6 +458,12 @@ class Sysproxy:
             res = all(res)         
         else:
             res = self.unix_del_env(envname, modes)
+
+        if res:
+            for e_ in {envname, envname.lower(), envname.upper()}:
+                if e_ in os.environ:
+                    del os.environ[e_]
+
         if update_vars: self.update_vars()
         utils.log(f'Delete system env {envname}', 'debug')
         return res
