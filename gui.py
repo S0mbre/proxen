@@ -586,28 +586,7 @@ class MainWindow(BasicDialog):
         self.lo_enable_proxy.addWidget(self.l_enable_proxy, 0, QtCore.Qt.AlignHCenter)
         self.lo_enable_proxy.addWidget(self.btn_enable_proxy, 0, QtCore.Qt.AlignHCenter)
 
-        # persist toggle
-        act_persist_proxy_icon = QtGui.QIcon()
-        act_persist_proxy_icon.addPixmap(QtGui.QPixmap(utils.make_abspath('resources/off-button.png')),  QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        act_persist_proxy_icon.addPixmap(QtGui.QPixmap(utils.make_abspath('resources/on-button.png')), QtGui.QIcon.Normal, QtGui.QIcon.On)
-        self.act_persist_proxy = QAction(act_persist_proxy_icon, '')
-        self.act_persist_proxy.setToolTip('Persist proxy settings in system')
-        self.act_persist_proxy.setCheckable(True)
-        self.act_persist_proxy.setChecked(True)
-        self.act_persist_proxy.toggled.connect(self.on_act_persist_proxy)
-        self.btn_persist_proxy = QtWidgets.QToolButton()
-        self.btn_persist_proxy.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
-        self.btn_persist_proxy.setIconSize(QtCore.QSize(64, 64))
-        self.btn_persist_proxy.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed))
-        self.btn_persist_proxy.setDefaultAction(self.act_persist_proxy)
-        self.btn_persist_proxy.setStyleSheet('QToolButton { border: null; padding: 0px } ')
-        self.l_persist_proxy = QtWidgets.QLabel('PERSIST')
-        self.lo_persist_proxy = QtWidgets.QVBoxLayout()
-        self.lo_persist_proxy.addWidget(self.l_persist_proxy, 0, QtCore.Qt.AlignHCenter)
-        self.lo_persist_proxy.addWidget(self.btn_persist_proxy, 0, QtCore.Qt.AlignHCenter)
-
         self.lo_wmain.addLayout(self.lo_enable_proxy)
-        self.lo_wmain.addLayout(self.lo_persist_proxy)
         self.lo_wmain1 = QtWidgets.QVBoxLayout()
         self.lo_wmain1.addLayout(self.lo_wmain)
         self.lo_wmain1.addStretch()
@@ -752,10 +731,10 @@ class MainWindow(BasicDialog):
 
     def apply_config(self):
         self.sysproxy.fromdict(self.localproxy)
-        self.sysproxy.do_persist()
         self.settings_to_gui()
 
     def restore_config(self):
+        self.sysproxy.restore()
         self.localproxy = self.sysproxy.asdict()
         self.settings_to_gui()
 
@@ -766,27 +745,24 @@ class MainWindow(BasicDialog):
         # disconnect signals
         try:
             self.act_enable_proxy.toggled.disconnect()
-            self.act_persist_proxy.toggled.disconnect()            
             self.gb_noproxy.toggled.disconnect()
             self.te_noproxy.textChanged.disconnect()
         except:
             pass
 
-        # main toggles
+        # main toggle
         self.act_enable_proxy.setChecked(self.localproxy['enabled'])
-        self.act_persist_proxy.setChecked(sysproxy.OS == 'Windows' or (self.localproxy['http_proxy'] and self.localproxy['http_proxy']['persist']))
-        self.act_persist_proxy.setEnabled(sysproxy.OS != 'Windows')
 
         # settings
         self.on_btns_protocol_selected(0, True)
 
-        self.gb_noproxy.setChecked(not self.localproxy['noproxy'] is None)
-        self.te_noproxy.setPlainText('\n'.join(self.localproxy['noproxy']['noproxies'].split(',')))
+        noproxy_ = not self.localproxy['noproxy'] is None
+        self.gb_noproxy.setChecked(noproxy_)
+        self.te_noproxy.setPlainText('\n'.join(self.localproxy['noproxy'].split(',')) if noproxy_ else '')
         self.update_actions_enabled()
 
         # reconnect signals
         self.act_enable_proxy.toggled.connect(self.on_act_enable_proxy)
-        self.act_persist_proxy.toggled.connect(self.on_act_persist_proxy)
         self.gb_noproxy.toggled.connect(self.on_gb_noproxy_checked)
         self.te_noproxy.textChanged.connect(self.on_te_noproxy_changed)
 
@@ -795,6 +771,13 @@ class MainWindow(BasicDialog):
         if self.validate(): 
             self.apply_config()
             self.accept()
+        else:
+            self.reject()
+
+    @Slot()
+    def on_btn_cancel_clicked(self):
+        self.sysproxy.restore()
+        self.reject()
 
     @Slot()
     def update_actions_enabled(self):
@@ -820,13 +803,6 @@ class MainWindow(BasicDialog):
         self.localproxy['enabled'] = checked
         self.update_actions_enabled()
 
-    @Slot(bool)
-    def on_act_persist_proxy(self, checked):
-        for proxy in PROXY_OBJS:
-            if self.localproxy[proxy] is None: continue
-            self.localproxy[proxy]['persist'] = checked
-        self.update_actions_enabled()
-
     @Slot(int)
     def tb_currentChanged(self, index):
         self.setFixedHeight(250 if index == 0 else 550)
@@ -843,7 +819,7 @@ class MainWindow(BasicDialog):
             self.le_pass.textEdited.disconnect()
         except:
             pass
-        proxy_obj = self.localproxy[PROXY_OBJS[self.btns_protocol.checkedId()]]
+        proxy_obj = self.localproxy.get(PROXY_OBJS[self.btns_protocol.checkedId()], None)
         self.gb_proxy.setChecked(not proxy_obj is None)
         self.le_proxyhost.setText(proxy_obj['host'] if proxy_obj else '')
         if proxy_obj:
@@ -865,7 +841,6 @@ class MainWindow(BasicDialog):
         if not self.act_apply.isEnabled():
             return
         self.apply_config()
-        self.update_actions_enabled()
 
     @Slot(bool)
     def on_act_restore(self, checked):        
@@ -873,7 +848,6 @@ class MainWindow(BasicDialog):
         if not self.act_restore.isEnabled():
             return
         self.restore_config()
-        self.update_actions_enabled()
 
     @Slot(bool)
     def on_act_loadconfig(self, checked):
@@ -881,7 +855,7 @@ class MainWindow(BasicDialog):
         selected_path = selected_path[0]
         if not selected_path: return
         with open(selected_path, 'r', encoding=utils.CODING) as f_:
-            self.localproxy = json.load(f_)
+            self.localproxy = json.load(f_) # TODO: check keys in dict import
             self.settings_to_gui()
 
     @Slot(bool)
@@ -894,54 +868,86 @@ class MainWindow(BasicDialog):
 
     @Slot(str)
     def on_le_proxyhost_edit(self, text):
-        proxy_obj = self.localproxy[PROXY_OBJS[self.btns_protocol.checkedId()]]
-        proxy_obj['host'] = text
+        prot = PROXY_OBJS[self.btns_protocol.checkedId()]
+        proxy_obj = self.localproxy.get(prot, None)
+        if not proxy_obj is None:
+            proxy_obj['host'] = text
+        else:
+            prot_ = prot.split('_')[0]
+            host_ = text
+            port_ = self.le_proxyport.value()
+            if host_ and port_:
+                self.localproxy[prot] = sysproxy.Proxyconf(None, prot_, host_,
+                                                           port_, self.gb_auth.isChecked(), 
+                                                           self.le_user.text(), self.le_pass.text())
+            else:
+                self.localproxy[prot] = None
         self.update_actions_enabled()
 
     @Slot(int)
     def on_le_proxyport_changed(self, value):
-        proxy_obj = self.localproxy[PROXY_OBJS[self.btns_protocol.checkedId()]]
-        proxy_obj['port'] = value
+        prot = PROXY_OBJS[self.btns_protocol.checkedId()]
+        proxy_obj = self.localproxy.get(prot, None)
+        if not proxy_obj is None:
+            proxy_obj['port'] = value
+        else:
+            prot_ = prot.split('_')[0]
+            host_ = self.le_proxyhost.text()
+            port_ = value
+            if host_ and port_:
+                self.localproxy[prot] = sysproxy.Proxyconf(None, prot_, host_,
+                                                           port_, self.gb_auth.isChecked(), 
+                                                           self.le_user.text(), self.le_pass.text())
+            else:
+                self.localproxy[prot] = None
         self.update_actions_enabled()
 
     @Slot(bool)
     def on_gb_proxy_checked(self, checked):
-        proxy = PROXY_OBJS[self.btns_protocol.checkedId()]
+        prot = PROXY_OBJS[self.btns_protocol.checkedId()]
         if not checked:
-            self.localproxy[proxy] = None
+            self.localproxy[prot] = None
         else:
-            sysproxy_obj = getattr(self.sysproxy, proxy, None)
-            self.localproxy[proxy] = sysproxy_obj.asdict().copy() if sysproxy_obj else sysproxy.Proxyconf().asdict().copy()
+            proxy_obj: sysproxy.Proxyconf = getattr(self.sysproxy, prot, None)
+            self.localproxy[prot] = proxy_obj.asdict().copy() if proxy_obj else None
         self.settings_to_gui()
 
     @Slot(bool)
     def on_gb_auth_checked(self, checked):
-        proxy = PROXY_OBJS[self.btns_protocol.checkedId()]
-        self.localproxy[proxy]['auth'] = checked
-        self.update_actions_enabled()
+        prot = PROXY_OBJS[self.btns_protocol.checkedId()]
+        if self.localproxy.get(prot, None):
+            self.localproxy[prot]['auth'] = checked
+            self.update_actions_enabled()
 
     @Slot(str)
     def on_le_user_edit(self, text):
-        proxy_obj = self.localproxy[PROXY_OBJS[self.btns_protocol.checkedId()]]
-        proxy_obj['uname'] = text
-        self.update_actions_enabled()
+        prot = PROXY_OBJS[self.btns_protocol.checkedId()]
+        if self.localproxy.get(prot, None):
+            self.localproxy[prot]['uname'] = text
+            self.update_actions_enabled()
 
     @Slot(str)
     def on_le_pass_edit(self, text):
-        proxy_obj = self.localproxy[PROXY_OBJS[self.btns_protocol.checkedId()]]
-        proxy_obj['password'] = text
-        self.update_actions_enabled()
+        prot = PROXY_OBJS[self.btns_protocol.checkedId()]
+        if self.localproxy.get(prot, None):
+            self.localproxy[prot]['password'] = text
+            self.update_actions_enabled()
 
     @Slot(bool)
     def on_gb_noproxy_checked(self, checked):
-        self.localproxy['noproxy'] = None if not checked else self.sysproxy.noproxy.asdict().copy()
+        if not checked:
+            self.localproxy['noproxy'] = None 
+        else:
+            self.localproxy['noproxy'] = str(self.sysproxy.noproxy) if not self.sysproxy.noproxy is None else None
         self.update_actions_enabled()
 
     @Slot()
     def on_te_noproxy_changed(self):
+        if self.localproxy.get('noproxy', None) is None:
+            return
         txt = self.te_noproxy.toPlainText()
         if txt:
-            self.localproxy['noproxy']['noproxies'] = ','.join(txt.split('\n'))
+            self.localproxy['noproxy'] = ','.join(txt.split('\n'))
         else:
             self.localproxy['noproxy'] = None
         self.update_actions_enabled()        

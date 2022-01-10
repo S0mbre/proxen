@@ -535,16 +535,18 @@ class Proxy:
         return d
 
     def fromdict(self, dconfig: dict):
+        if self.asdict() == dconfig:
+            return
         self.begin_updates()
         for attr in ('http_proxy', 'https_proxy', 'ftp_proxy', 'rsync_proxy'):
-            if not attr in dconfig: continue
-            obj = None if dconfig[attr] is None else Proxyconf(self._on_setattr, dconfig[attr]['protocol'], dconfig[attr]['host'],
-                                                               dconfig[attr]['port'], dconfig[attr]['auth'], dconfig[attr]['uname'], dconfig[attr]['password'])
+            obj = dconfig.get(attr, None)
+            if not obj is None:
+                obj = Proxyconf(self._on_setattr, obj.get('protocol', 'http'), obj.get('host', ''),
+                                obj.get('port', 3128), obj.get('auth', False), 
+                                obj.get('uname', ''), obj.get('password', ''))
             setattr(self, attr, obj)
-        if 'noproxy' in dconfig:
-            self.noproxy = None if dconfig['noproxy'] is None else Noproxy(self._on_setattr, dconfig['noproxy'])
-        if 'enabled' in dconfig:
-            self.enabled = dconfig['enabled']
+        self.noproxy = Noproxy(self._on_setattr, dconfig['noproxy']) if dconfig.get('noproxy', None) else None
+        self.enabled = dconfig.get('enabled', self.enabled)
         self.end_updates()
 
     def begin_updates(self):
@@ -656,7 +658,7 @@ class Proxy:
         if (self._noproxy == value) or (self._noproxy.noproxies == value.noproxies and self._noproxy.persist == value.persist):
             return
         if OS == 'Windows':
-            self.sysproxy.win_set_reg('ProxyOverride', value.asstr(True) if value else '')
+            self.sysproxy.win_set_reg_proxy('ProxyOverride', value.asstr(True) if value else '')
         if not value:
             self.sysproxy.unset_sys_env('no_proxy', update_vars=not self._isupdating)
         elif value.noproxies:
