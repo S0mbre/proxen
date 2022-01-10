@@ -201,7 +201,7 @@ class Sysproxy:
                     ftext = reg.sub('\n', ftext)
                     with open(fname, 'w', encoding=utils.CODING) as f_:
                         f_.write(ftext)
-                    utils.log(f'Deleted {envname} from file {fname}', 'debug')
+                    utils.log(f'Deleted env "{envname}" from file "{fname}"', 'debug')
             return True
         except:
             traceback.print_exc()
@@ -225,7 +225,7 @@ class Sysproxy:
                 for e_ in (envname.lower(), envname.upper()):
                     f_.write(f'{utils.NL}export {e_}="{value}"{utils.NL}')
 
-            utils.log(f'Written {envname} to file {filepath}', 'debug')
+            utils.log(f'Written env "{envname}" = "{value}" to file "{filepath}"', 'debug')
             return True
         except:
             traceback.print_exc()
@@ -261,7 +261,7 @@ class Sysproxy:
             try:
                 val = winreg.QueryValueEx(k, valname)
             except:
-                utils.log(f'Unable to set win reg key {keyname}\\{valname} (value does not exist!)', 'debug')
+                utils.log(f'Unable to set win reg key "{keyname}\\{valname}" (value does not exist!)', 'debug')
                 res = None
             else:
                 if isinstance(value, str) and not val[1] in (winreg.REG_SZ, winreg.REG_EXPAND_SZ):
@@ -275,10 +275,10 @@ class Sysproxy:
                 res = winreg.QueryValueEx(k, valname)                
                 # propagate env vars by calling setx
                 subprocess.run(f'setx ttt t > nul', shell=True)
-                utils.log(f'Set win reg key {keyname}\\{valname} to {value} = {res[0]}', 'debug')
+                utils.log(f'Set win reg key "{keyname}\\{valname}" = "{res[0]}"', 'debug')
         except:
             traceback.print_exc()
-            utils.log(f'Error setting win reg key {keyname}\\{valname} to {value}', 'debug')
+            utils.log(f'Error setting win reg key "{keyname}\\{valname}" = "{value}"', 'debug')
         finally:
             if k: winreg.CloseKey(k)
         return res
@@ -323,17 +323,17 @@ class Sysproxy:
             k = winreg.OpenKeyEx(branch, keyname, 0, winreg.KEY_ALL_ACCESS)
             try:
                 res = winreg.QueryValueEx(k, valname)
-                utils.log(f'Failed to create win reg key {keyname}\\{valname} (already exists!)', 'debug')
+                utils.log(f'Failed to create win reg key "{keyname}\\{valname}" (already exists!)', 'debug')
                 res = None
             except FileNotFoundError:
                 winreg.SetValueEx(k, valname, 0, valtype, value)
                 res = winreg.QueryValueEx(k, valname)
                 # propagate env vars by calling setx
                 subprocess.run(f'setx ttt t > nul', shell=True)
-                utils.log(f'Created win reg key {keyname}\\{valname} = {res[0]}', 'debug')
+                utils.log(f'Created win reg key "{keyname}\\{valname}" = "{res[0]}"', 'debug')
         except:
             traceback.print_exc()
-            utils.log(f'Error creating win reg key {keyname}\\{valname} = {value}', 'debug')
+            utils.log(f'Error creating win reg key "{keyname}\\{valname}" = "{value}"', 'debug')
         finally:
             if k: winreg.CloseKey(k)
         return res
@@ -350,11 +350,11 @@ class Sysproxy:
             winreg.DeleteValue(k, valname)
             # propagate env vars by calling setx
             subprocess.run(f'setx ttt t > nul', shell=True)
-            utils.log(f'Deleted win reg key {keyname}\\{valname}', 'debug')
+            utils.log(f'Deleted win reg key "{keyname}\\{valname}"', 'debug')
             res = True
         except:
             traceback.print_exc()
-            utils.log(f'Error deleting win reg key {keyname}\\{valname}', 'debug')
+            utils.log(f'Error deleting win reg key "{keyname}\\{valname}"', 'debug')
         finally:
             if k: winreg.CloseKey(k)
         return res
@@ -438,7 +438,7 @@ class Sysproxy:
                 os.environ[e_] = value
         
         if update_vars: self.update_vars()        
-        utils.log(f'Set system env {envname} = {value}', 'debug')
+        utils.log(f'Set system env "{envname}" = "{value}"', 'debug')
         return res
 
     def unset_sys_env(self, envname: str, modes=('user',), update_vars=True) -> bool:
@@ -465,7 +465,7 @@ class Sysproxy:
                     del os.environ[e_]
 
         if update_vars: self.update_vars()
-        utils.log(f'Delete system env {envname}', 'debug')
+        utils.log(f'Delete system env "{envname}"', 'debug')
         return res
 
     def get_sys_http_proxy(self) -> dict:

@@ -7,7 +7,7 @@ from qtimports import QtCore, QtWidgets
 
 def main():
 
-    from gui import MainWindow, TestEnv
+    from gui import MainWindow
     
     try:        
         # change working dir to current for correct calls to git
@@ -19,8 +19,8 @@ def main():
         # create QApplication instance
         app = QtWidgets.QApplication(sys.argv)
         # create main window (passing all found command-line args)
-        # mw = MainWindow()
-        mw = TestEnv()
+        mw = MainWindow()
+        # mw = TestEnv()
         mw.show()
         # run app's event loop
         sys.exit(app.exec())
