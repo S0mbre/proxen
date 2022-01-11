@@ -150,9 +150,9 @@ class Sysproxy:
     def get_env(self, envname, case_sensitive=False, modes=('user', 'system'), default=None): 
         res = None      
         if 'user' in modes:
-            res = self.locals.get(envname, default if case_sensitive else self.locals.get(envname.lower(), self.locals.get(envname.upper(), default)))
+            res = self.locals.get(envname, default if case_sensitive else self.locals.get(envname.upper(), self.locals.get(envname.lower(), default)))
         if res is None and 'system' in modes:
-            res = self.globals.get(envname, default if case_sensitive else self.locals.get(envname.lower(), self.locals.get(envname.upper(), default)))
+            res = self.globals.get(envname, default if case_sensitive else self.globals.get(envname.upper(), self.globals.get(envname.lower(), default)))
         return res
 
     def unix_get_envs(self, filepath) -> dict:
@@ -272,10 +272,13 @@ class Sysproxy:
                         value = int(value)
                 if val[0] != value:
                     winreg.SetValueEx(k, valname, 0, val[1], value)
-                res = winreg.QueryValueEx(k, valname)                
-                # propagate env vars by calling setx
-                subprocess.run(f'setx ttt t > nul', shell=True)
-                utils.log(f'Set win reg key "{keyname}\\{valname}" = "{res[0]}"', 'debug')
+                    # propagate env vars by calling setx
+                    subprocess.run(f'setx ttt t > nul', shell=True)                    
+                    res = winreg.QueryValueEx(k, valname) 
+                    utils.log(f'Set win reg key "{keyname}\\{valname}" = "{res[0]}"', 'debug')
+                else:                    
+                    res = val    
+                    utils.log(f'Win reg key "{keyname}\\{valname}" is already "{res[0]}", skipping reset', 'debug')
         except:
             traceback.print_exc()
             utils.log(f'Error setting win reg key "{keyname}\\{valname}" = "{value}"', 'debug')
@@ -345,12 +348,15 @@ class Sysproxy:
             branch = WIN_REG_BRANCHES[branch]
         k = None
         res = False
-        try:
+        try:            
             k = winreg.OpenKeyEx(branch, keyname, 0, winreg.KEY_ALL_ACCESS)
-            winreg.DeleteValue(k, valname)
-            # propagate env vars by calling setx
-            subprocess.run(f'setx ttt t > nul', shell=True)
-            utils.log(f'Deleted win reg key "{keyname}\\{valname}"', 'debug')
+            try:
+                winreg.DeleteValue(k, valname)
+                # propagate env vars by calling setx
+                subprocess.run(f'setx ttt t > nul', shell=True)
+                utils.log(f'Deleted win reg key "{keyname}\\{valname}"', 'debug')
+            except FileNotFoundError:
+                utils.log(f'Win reg key "{keyname}\\{valname}" is not found, skipping delete', 'debug')            
             res = True
         except:
             traceback.print_exc()
@@ -359,7 +365,7 @@ class Sysproxy:
             if k: winreg.CloseKey(k)
         return res
 
-    def win_list_reg(self, keyname, branch='HKEY_CURRENT_USER', expand_vars=True) -> dict:
+    def win_list_reg(self, keyname, branch='HKEY_CURRENT_USER', expand_vars=True, with_types=False) -> dict:
         if OS != 'Windows':
             raise Exception('This method is available only on Windows platforms!')
         if isinstance(branch, str):
@@ -376,10 +382,10 @@ class Sysproxy:
                     if val[0] == WIN_DUMMY_KEYNAME:
                         continue
                     if not expand_vars or not isinstance(val[1], str):
-                        res[val[0]] = val[1:]
+                        res[val[0]] = val[1:] if with_types else val[1]
                     else:                        
                         v = reg.sub(lambda m: os.environ.get(m[1], m[0]), val[1])
-                        res[val[0]] = (v, val[2])
+                        res[val[0]] = (v, val[2]) if with_types else v
                 except OSError:
                     break
         except:
@@ -408,22 +414,32 @@ class Sysproxy:
     def set_sys_env(self, envname: str, value, create=True, valtype=None, modes=('user',), update_vars=True) -> bool:
         if ('system' in modes) and (not CURRENT_USER[1]):
             raise Exception('Cannot execute command: SU privilege asked!')
-        res = False
+        
         env = self.get_sys_env(envname)
+        if ('user' in modes and env['user'] == value) or ('system' in modes and env['system'] == value):
+            utils.log(f'System env "{envname}" is already "{value}", skipping reset', 'debug')
+            return True
+
+        res = False
         if OS == 'Windows':
+            envname = envname.upper()
             res = []
             for mode in modes:
                 try:          
                     if mode == 'user':
-                        if not create or env['user']:
+                        if env['user']:
                             res.append(self.win_set_reg(WIN_ENV_LOCAL_KEY, envname, value, 'HKCU'))
-                        else:
+                        elif create:
                             res.append(self.win_create_reg(WIN_ENV_LOCAL_KEY, envname, value, valtype, 'HKCU'))
-                    elif mode == 'system':
-                        if not create or env['system']:
-                            res.append(self.win_set_reg(WIN_ENV_SYSTEM_KEY, envname, value, 'HKLM'))
                         else:
+                            res.append(False)
+                    elif mode == 'system':
+                        if env['system']:
+                            res.append(self.win_set_reg(WIN_ENV_SYSTEM_KEY, envname, value, 'HKLM'))
+                        elif create:
                             res.append(self.win_create_reg(WIN_ENV_SYSTEM_KEY, envname, value, valtype, 'HKLM'))
+                        else:
+                            res.append(False)
                 except:
                     res.append(False)   
             res = all(res)            
@@ -437,24 +453,31 @@ class Sysproxy:
             for e_ in {envname, envname.lower(), envname.upper()}:
                 os.environ[e_] = value
         
-        if update_vars: self.update_vars()        
-        utils.log(f'Set system env "{envname}" = "{value}"', 'debug')
+        if update_vars: 
+            self.update_vars()
+        if res:    
+            utils.log(f'Set system env "{envname}" = "{value}"', 'debug')
         return res
 
     def unset_sys_env(self, envname: str, modes=('user',), update_vars=True) -> bool:
         if ('system' in modes) and (not CURRENT_USER[1]):
             raise Exception('Cannot execute command: SU privilege asked!')
+        env = self.get_sys_env(envname)
+        if ('user' in modes and not env['user']) or ('system' in modes and not env['system']):
+            utils.log(f'System env "{envname}" does not exist, skipping unset', 'debug')
+            return True
         res = False
-        if OS == 'Windows':
+        if OS == 'Windows':            
             res = []
-            for mode in modes:
-                try:
-                    if mode == 'user':
-                        res.append(self.win_del_reg(WIN_ENV_LOCAL_KEY, envname, 'HKCU'))
-                    elif mode == 'system':
-                        res.append(self.win_del_reg(WIN_ENV_SYSTEM_KEY, envname, 'HKLM'))
-                except:
-                    res.append(False)
+            for e_ in {envname, envname.lower(), envname.upper()}:
+                for mode in modes:
+                    try:
+                        if mode == 'user':
+                            res.append(self.win_del_reg(WIN_ENV_LOCAL_KEY, e_, 'HKCU'))
+                        elif mode == 'system':
+                            res.append(self.win_del_reg(WIN_ENV_SYSTEM_KEY, e_, 'HKLM'))
+                    except:
+                        res.append(False)
             res = all(res)         
         else:
             res = self.unix_del_env(envname, modes)
@@ -469,14 +492,29 @@ class Sysproxy:
         return res
 
     def get_sys_http_proxy(self) -> dict:
+        env1 = self.get_sys_env('all_proxy')
+        env2 = self.get_sys_env('http_proxy')
+        env = {'user': env1['user'] or env2['user'], 'system': env1['system'] or env2['system']}
+
         if OS == 'Windows':
-            res = self.win_get_reg_proxy('ProxyServer')
+            res = self.win_get_reg_proxy('ProxyServer')            
             if not res is None:
-                res = {'user': res, 'system': None}
+                if not '@' in res:
+                    # try to get auth from env variable
+                    env_str = env['user'] or env['system']
+                    if env_str and '@' in env_str:
+                        env_str_sp = env_str.split('://')
+                        if len(env_str_sp) > 1:
+                            env_str = env_str_sp[1]
+                        env_str_sp = env_str.split('@')
+                        if len(env_str_sp[0]):
+                            res = f'{env_str_sp[0]}@{res}'
+                res = {'user': f'http://{res}', 'system': None}
             else:
-                res = self.get_sys_env('http_proxy') or self.get_sys_env('all_proxy')
+                res = env
             return res
-        return self.get_sys_env('http_proxy') or self.get_sys_env('all_proxy')
+
+        return env
 
     def get_sys_proxy_enabled(self) -> bool:
         if OS == 'Windows':
@@ -527,12 +565,15 @@ class Proxy:
         self.read_system()
         self.save()
 
-    def asdict(self):
+    def asdict(self) -> dict:
         d = {'enabled': self.enabled, 'noproxy': str(self.noproxy)}
         for attr in ('http_proxy', 'https_proxy', 'ftp_proxy', 'rsync_proxy'):
             prop = getattr(self, attr, None)
             d[attr] = prop.asdict() if prop else None
         return d
+
+    def asstr(self) -> str:
+        return json.dumps(self.asdict())
 
     def fromdict(self, dconfig: dict):
         if self.asdict() == dconfig:
@@ -548,6 +589,9 @@ class Proxy:
         self.noproxy = Noproxy(self._on_setattr, dconfig['noproxy']) if dconfig.get('noproxy', None) else None
         self.enabled = dconfig.get('enabled', self.enabled)
         self.end_updates()
+
+    def fromstr(self, strconfig: str):
+        self.fromdict(json.loads(strconfig))
 
     def begin_updates(self):
         self._isupdating += 1
@@ -578,6 +622,7 @@ class Proxy:
         self._https_proxy = self._get_sys_proxy('https_proxy')
         self._ftp_proxy = self._get_sys_proxy('ftp_proxy')
         self._rsync_proxy = self._get_sys_proxy('rsync_proxy')
+        utils.log(f'SYSTEM SETTINGS: {str(self)}', 'debug')
 
     def store_config(self, config_file=None):
         if not config_file:
@@ -777,3 +822,6 @@ class Proxy:
     def restore(self):
         if getattr(self, 'stored', None):
             self.fromdict(self.stored)
+    
+    def __str__(self):
+        return self.asstr()

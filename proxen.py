@@ -8,6 +8,7 @@ from qtimports import QtCore, QtWidgets
 def main():
 
     from gui import MainWindow
+    # from gui import TestEnv
     
     try:        
         # change working dir to current for correct calls to git

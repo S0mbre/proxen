@@ -18,13 +18,21 @@ class QThreadStump(QtCore.QThread):
     ## Error signal (args are: instance of this thread and the error message)
     sig_error = Signal(QtCore.QThread, str)
 
-    def __init__(self, default_priority=QtCore.QThread.NormalPriority,
+    def __init__(self, priority=QtCore.QThread.NormalPriority,
                  on_start=None, on_finish=None, on_run=None, on_error=None,
                  start_signal=None, stop_signal=None,
-                 free_on_finish=False, start_now=False, can_terminate=True):
+                 free_on_finish=False, can_terminate=True, start_now=False):
         super().__init__()
-        self.init(default_priority, on_start, on_finish, on_run, on_error,
-                  start_signal, stop_signal, free_on_finish, can_terminate)
+        self.priority = priority
+        self.on_start = on_start
+        self.on_finish = on_finish
+        self.on_run = on_run
+        self.on_error = on_error
+        self.free_on_finish = free_on_finish
+        self.can_terminate = can_terminate
+        self.start_signal = start_signal
+        self.stop_signal = stop_signal
+        self.mutex = QtCore.QMutex()
         if start_now: self.start()
 
     def __del__(self):
@@ -33,27 +41,105 @@ class QThreadStump(QtCore.QThread):
         except:
             pass
 
-    def init(self, default_priority=QtCore.QThread.NormalPriority,
-             on_start=None, on_finish=None, on_run=None, on_error=None,
-             start_signal=None, stop_signal=None,
-             free_on_finish=False, can_terminate=True):
+    @property
+    def priority(self):
+        return self.default_priority
+
+    @priority.setter
+    def priority(self, _priority):
         try:
-            self.started.disconnect()
-            self.finished.disconnect()
-            self.sig_error.disconnect()
+            self.default_priority = _priority if _priority != QtCore.QThread.InheritPriority else QtCore.QThread.NormalPriority
         except:
             pass
 
-        self.setTerminationEnabled(can_terminate)
-        if on_start: self.started.connect(on_start)
-        if on_finish: self.finished.connect(on_finish)
-        if free_on_finish: self.finished.connect(self.deleteLater)
-        if start_signal: start_signal.connect(self.start)
-        if stop_signal: stop_signal.connect(self.terminate)
-        if on_error: self.sig_error.connect(on_error)
-        self.default_priority = default_priority if default_priority != QtCore.QThread.InheritPriority else QtCore.QThread.NormalPriority
-        self.on_run = on_run
-        self.mutex = QtCore.QMutex()
+    @property
+    def on_start(self):
+        return self._on_start
+
+    @on_start.setter
+    def on_start(self, _on_start):
+        try:
+            self.started.disconnect()
+        except:
+            pass
+        self._on_start = _on_start
+        if self._on_start:
+            self.started.connect(self._on_start)
+
+    @property
+    def on_finish(self):
+        return self._on_finish
+
+    @on_finish.setter
+    def on_finish(self, _on_finish):
+        try:
+            self.finished.disconnect()
+        except:
+            pass
+        self._on_finish = _on_finish
+        if self._on_finish:
+            self.finished.connect(self._on_finish)
+        if getattr(self, '_free_on_finish', False):
+            self.finished.connect(self.deleteLater)
+
+    @property
+    def free_on_finish(self):
+        return self._free_on_finish
+
+    @free_on_finish.setter
+    def free_on_finish(self, _free_on_finish):
+        try:
+            self.finished.disconnect()
+        except:
+            pass
+        self._free_on_finish = _free_on_finish
+        if getattr(self, '_on_finish', None):
+            self.finished.connect(self._on_finish)
+        if self._free_on_finish:
+            self.finished.connect(self.deleteLater)
+
+    @property
+    def on_error(self):
+        return self._on_error
+
+    @on_error.setter
+    def on_error(self, _on_error):
+        try:
+            self.sig_error.disconnect()
+        except:
+            pass
+        self._on_error = _on_error
+        if self._on_error:
+            self.sig_error.connect(self._on_error)
+
+    @property
+    def can_terminate(self):
+        return self._can_terminate
+
+    @can_terminate.setter
+    def can_terminate(self, _can_terminate):
+        self.setTerminationEnabled(_can_terminate)
+        self._can_terminate = _can_terminate
+
+    @property
+    def start_signal(self):
+        return self._start_signal
+
+    @start_signal.setter
+    def start_signal(self, _start_signal):
+        self._start_signal = _start_signal
+        if self._start_signal:
+            self._start_signal.connect(self.start)
+
+    @property
+    def stop_signal(self):
+        return self._stop_signal
+
+    @stop_signal.setter
+    def stop_signal(self, _stop_signal):
+        self._stop_signal = _stop_signal
+        if self._stop_signal:
+            self._stop_signal.connect(self.terminate)
 
     def lock(self):
         self.mutex.lock()
@@ -63,7 +149,10 @@ class QThreadStump(QtCore.QThread):
 
     ## Executes the worker function pointed to by QThreadStump::on_run.
     def run(self):
-        self.setPriority(self.default_priority)
+        try:
+            self.setPriority(self.priority)
+        except:
+            pass
         if self.on_run and not self.isInterruptionRequested():
             try:
                 self.on_run()
@@ -206,7 +295,7 @@ class BasicDialog(QtWidgets.QDialog):
 
 # ******************************************************************************** #
 # *****          TestEnv
-# ******************************************************************************** # 
+# ******************************************************************************** #
 
 class TestEnvEditorAsk(BasicDialog):
     def __init__(self):
@@ -255,7 +344,7 @@ class TestEnvEditor(BasicDialog):
         self.le_name = QtWidgets.QLineEdit('')
         self.le_value = QtWidgets.QLineEdit('')
         self.cb_type = QtWidgets.QComboBox()
-        self.cb_type.setEditable(False)        
+        self.cb_type.setEditable(False)
         cb_data = [('String', 'string'), ('Number', 'number'), ('Blob', 'binary'), ('String with macros', 'macro')]
         for d in cb_data:
             self.cb_type.addItem(d[0], d[1])
@@ -326,7 +415,7 @@ class TestEnv(BasicDialog):
         self.act_refresh.setToolTip('Refresh system env variables')
         self.act_refresh.triggered.connect(self.on_act_refresh)
         self.tbar.addAction(self.act_refresh)
-        
+
         self.act_add = QAction(QtGui.QIcon("resources/add.png"), 'Add')
         self.act_add.setShortcut(QtGui.QKeySequence.New)
         self.act_add.setToolTip('Add variable')
@@ -370,8 +459,8 @@ class TestEnv(BasicDialog):
 
         i = 0
         for k, lst_envs in enumerate((self.sysproxy.locals, self.sysproxy.globals)):
-            for env_name in lst_envs:                
-                item0 = QtWidgets.QTableWidgetItem(env_name)               
+            for env_name in lst_envs:
+                item0 = QtWidgets.QTableWidgetItem(env_name)
                 item1 = QtWidgets.QTableWidgetItem('user' if k == 0 else 'system')
                 val = lst_envs[env_name][0]
                 if isinstance(val, str):
@@ -489,11 +578,11 @@ class TestEnv(BasicDialog):
 
         self.thread_action.on_run = self.create_var(env, val, valtype, modes)
         self.thread_action.start()
-        
+
     @Slot(bool)
     def on_act_delete(self, checked):
         selitems = self.tw_envs.selectedItems()
-        if len(selitems) < 2 or self.thread_update.isRunning(): 
+        if len(selitems) < 2 or self.thread_update.isRunning():
             return
 
         while self.thread_action.isRunning():
@@ -504,12 +593,12 @@ class TestEnv(BasicDialog):
         for item in selitems:
             if item.column() != 0: continue
             envmode = self.tw_envs.item(item.row(), 1).text()
-            if envmode == 'system' and not sysproxy.CURRENT_USER[1]: 
+            if envmode == 'system' and not sysproxy.CURRENT_USER[1]:
                 if not warned:
                     QtWidgets.QMessageBox.warning(self, 'Warning', 'Cannot unset variable without SU privilege!')
                 continue
             envs_to_unset.append((item.text(), envmode))
-        
+
         if not envs_to_unset: return
 
         self.thread_action.on_run = self.unset_vars(envs_to_unset)
@@ -517,7 +606,7 @@ class TestEnv(BasicDialog):
 
     @Slot(QtWidgets.QTableWidgetItem)
     def tw_itemChanged(self, item: QtWidgets.QTableWidgetItem):
-        if item.column() != 2 or self.thread_update.isRunning(): 
+        if item.column() != 2 or self.thread_update.isRunning():
             return
 
         while self.thread_action.isRunning():
@@ -551,8 +640,12 @@ class MainWindow(BasicDialog):
         self.sysproxy = sysproxy.Proxy()
         self.localproxy = self.sysproxy.asdict()
         rec = QtGui.QGuiApplication.primaryScreen().geometry()
+        self.thread_apply = QThreadStump(on_run=None, on_start=None,
+                                         on_finish=self._on_apply_finish, on_error=self._on_apply_finish)
         super().__init__(title='Proxen!', icon='proxen.png', geometry=(rec.width() // 2 - 175, rec.height() // 2 - 125, 350, 550),
                          flags=QtCore.Qt.Dialog | QtCore.Qt.MSWindowsFixedSizeDialogHint)
+        self.btn_OK.setToolTip('Apply changes and quit')
+        self.btn_cancel.setToolTip('Cancel changes and quit')
         self.settings_to_gui()
 
     def addMainLayout(self):
@@ -659,6 +752,7 @@ class MainWindow(BasicDialog):
         self.lo_gb_proxy.addWidget(self.gb_auth)
         self.btn_copyto = QtWidgets.QPushButton('Copy to others')
         self.btn_copyto.setFixedWidth(120)
+        self.btn_copyto.clicked.connect(self.on_btn_copyto)
         self.lo_gb_proxy.addWidget(self.btn_copyto)
 
         self.lo_gb_proxy.addStretch()
@@ -704,7 +798,7 @@ class MainWindow(BasicDialog):
 
         self.act_saveconfig = QAction(QtGui.QIcon("resources/save.png"), 'Save')
         self.act_saveconfig.setToolTip('Save current configuration to disk')
-        self.act_saveconfig.triggered.connect(self.on_act_saveconfig)        
+        self.act_saveconfig.triggered.connect(self.on_act_saveconfig)
         self.btn_saveconfig = QtWidgets.QToolButton()
         self.btn_saveconfig.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self.btn_saveconfig.setFixedWidth(70)
@@ -713,11 +807,11 @@ class MainWindow(BasicDialog):
 
         self.act_loadconfig = QAction(QtGui.QIcon("resources/folder-15.png"), 'Load')
         self.act_loadconfig.setToolTip('Load configuration from disk')
-        self.act_loadconfig.triggered.connect(self.on_act_loadconfig)  
+        self.act_loadconfig.triggered.connect(self.on_act_loadconfig)
         self.btn_loadconfig = QtWidgets.QToolButton()
         self.btn_loadconfig.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self.btn_loadconfig.setFixedWidth(70)
-        self.btn_loadconfig.setDefaultAction(self.act_loadconfig)        
+        self.btn_loadconfig.setDefaultAction(self.act_loadconfig)
         self.lo_loadsave.addWidget(self.btn_loadconfig)
 
         self.lo_wconfig.addLayout(self.lo_loadsave)
@@ -729,16 +823,52 @@ class MainWindow(BasicDialog):
         self.layout_controls.addWidget(self.tb)
         # self.layout_controls.addStretch()
 
-    def apply_config(self):
+    def _do_apply_config(self):
         self.sysproxy.fromdict(self.localproxy)
-        self.settings_to_gui()
 
-    def restore_config(self):
+    def _do_restore_config(self):
         self.sysproxy.restore()
+
+    def _on_apply_finish(self):
         self.localproxy = self.sysproxy.asdict()
         self.settings_to_gui()
 
+    def apply_config(self):
+        if self.thread_apply.isRunning():
+            return
+        self.thread_apply.on_run = self._do_apply_config
+        # self.thread_apply.on_finish = self._on_apply_finish
+        self.thread_apply.start()
+
+    def restore_config(self):
+        if self.thread_apply.isRunning():
+            return
+        self.thread_apply.on_run = self._do_restore_config
+        # self.thread_apply.on_finish = self._on_apply_finish
+        self.thread_apply.start()
+
     # ============================================= SLOTS ================================================================ #
+
+    def showEvent(self, event):
+        # show
+        event.accept()
+        # fill vars
+        self.settings_to_gui()
+
+    def closeEvent(self, event):
+        if self.thread_apply.isRunning():
+            self.thread_apply.wait()
+        if self.sysproxy.asdict() != self.localproxy:
+            # unsaved changes
+            btn = QtWidgets.QMessageBox.question(self, 'Apply proxy settings',
+                                                'APPLY system proxy configuration before quit?',
+                                                defaultButton=QtWidgets.QMessageBox.Yes)
+            self.thread_apply.on_run = self._do_apply_config if btn == QtWidgets.QMessageBox.Yes else self._do_restore_config
+            self.thread_apply.on_finish = None
+            self.thread_apply.on_error = None
+            self.thread_apply.start()
+            self.thread_apply.wait()
+        event.accept()
 
     @Slot()
     def settings_to_gui(self):
@@ -768,15 +898,39 @@ class MainWindow(BasicDialog):
 
     @Slot()
     def on_btn_OK_clicked(self):
-        if self.validate(): 
-            self.apply_config()
-            self.accept()
-        else:
-            self.reject()
+        if not self.validate(): return
+        if self.sysproxy.asdict() != self.localproxy:
+            btn = QtWidgets.QMessageBox.question(self, 'Apply proxy settings',
+                                                    'APPLY proxy configuration and quit?',
+                                                    defaultButton=QtWidgets.QMessageBox.Yes)
+            if btn != QtWidgets.QMessageBox.Yes:
+                return
+
+            if self.thread_apply.isRunning():
+                self.thread_apply.wait()
+
+            self.thread_apply.on_run = self._do_apply_config
+            self.thread_apply.on_finish = None
+            self.thread_apply.on_error = None
+            self.thread_apply.start()
+            self.thread_apply.wait()
+        self.accept()
 
     @Slot()
     def on_btn_cancel_clicked(self):
-        self.sysproxy.restore()
+        if self.sysproxy.asdict() != self.localproxy:
+            btn = QtWidgets.QMessageBox.question(self, 'Cancel proxy settings',
+                                                    'RESTORE system proxy configuration and quit?',
+                                                    defaultButton=QtWidgets.QMessageBox.Yes)
+            if btn != QtWidgets.QMessageBox.Yes:
+                return
+            if self.thread_apply.isRunning():
+                self.thread_apply.wait()
+            self.thread_apply.on_run = self._do_restore_config
+            self.thread_apply.on_finish = None
+            self.thread_apply.on_error = None
+            self.thread_apply.start()
+            self.thread_apply.wait()
         self.reject()
 
     @Slot()
@@ -801,7 +955,8 @@ class MainWindow(BasicDialog):
     @Slot(bool)
     def on_act_enable_proxy(self, checked):
         self.localproxy['enabled'] = checked
-        self.update_actions_enabled()
+        # apply immediately to system
+        self.apply_config()
 
     @Slot(int)
     def tb_currentChanged(self, index):
@@ -825,8 +980,8 @@ class MainWindow(BasicDialog):
         if proxy_obj:
             self.le_proxyport.setValue(proxy_obj['port'])
         self.gb_auth.setChecked(proxy_obj['auth'] if proxy_obj else False)
-        self.le_user.setText(proxy_obj['uname'] if proxy_obj else '')
-        self.le_pass.setText(proxy_obj['password'] if proxy_obj else '')
+        self.le_user.setText(proxy_obj['uname'] if proxy_obj and proxy_obj['auth'] else '')
+        self.le_pass.setText(proxy_obj['password'] if proxy_obj and proxy_obj['auth'] else '')
         # reconnect signals
         self.gb_proxy.toggled.connect(self.on_gb_proxy_checked)
         self.le_proxyhost.textEdited.connect(self.on_le_proxyhost_edit)
@@ -836,14 +991,14 @@ class MainWindow(BasicDialog):
         self.le_pass.textEdited.connect(self.on_le_pass_edit)
 
     @Slot(bool)
-    def on_act_apply(self, checked):        
+    def on_act_apply(self, checked):
         self.update_actions_enabled()
         if not self.act_apply.isEnabled():
             return
         self.apply_config()
 
     @Slot(bool)
-    def on_act_restore(self, checked):        
+    def on_act_restore(self, checked):
         self.update_actions_enabled()
         if not self.act_restore.isEnabled():
             return
@@ -876,12 +1031,9 @@ class MainWindow(BasicDialog):
             prot_ = prot.split('_')[0]
             host_ = text
             port_ = self.le_proxyport.value()
-            if host_ and port_:
-                self.localproxy[prot] = sysproxy.Proxyconf(None, prot_, host_,
-                                                           port_, self.gb_auth.isChecked(), 
-                                                           self.le_user.text(), self.le_pass.text())
-            else:
-                self.localproxy[prot] = None
+            self.localproxy[prot] = sysproxy.Proxyconf(None, prot_, host_,
+                                                       port_, self.gb_auth.isChecked(),
+                                                       self.le_user.text(), self.le_pass.text())
         self.update_actions_enabled()
 
     @Slot(int)
@@ -894,12 +1046,9 @@ class MainWindow(BasicDialog):
             prot_ = prot.split('_')[0]
             host_ = self.le_proxyhost.text()
             port_ = value
-            if host_ and port_:
-                self.localproxy[prot] = sysproxy.Proxyconf(None, prot_, host_,
-                                                           port_, self.gb_auth.isChecked(), 
-                                                           self.le_user.text(), self.le_pass.text())
-            else:
-                self.localproxy[prot] = None
+            self.localproxy[prot] = sysproxy.Proxyconf(None, prot_, host_,
+                                                       port_, self.gb_auth.isChecked(),
+                                                       self.le_user.text(), self.le_pass.text())
         self.update_actions_enabled()
 
     @Slot(bool)
@@ -907,10 +1056,15 @@ class MainWindow(BasicDialog):
         prot = PROXY_OBJS[self.btns_protocol.checkedId()]
         if not checked:
             self.localproxy[prot] = None
+            self.settings_to_gui()
         else:
-            proxy_obj: sysproxy.Proxyconf = getattr(self.sysproxy, prot, None)
-            self.localproxy[prot] = proxy_obj.asdict().copy() if proxy_obj else None
-        self.settings_to_gui()
+            prot_ = prot.split('_')[0]
+            host_ = self.le_proxyhost.text()
+            port_ = self.le_proxyport.value()
+            self.localproxy[prot] = sysproxy.Proxyconf(None, prot_, host_,
+                                                       port_, self.gb_auth.isChecked(),
+                                                       self.le_user.text(), self.le_pass.text())
+            self.update_actions_enabled()
 
     @Slot(bool)
     def on_gb_auth_checked(self, checked):
@@ -936,7 +1090,7 @@ class MainWindow(BasicDialog):
     @Slot(bool)
     def on_gb_noproxy_checked(self, checked):
         if not checked:
-            self.localproxy['noproxy'] = None 
+            self.localproxy['noproxy'] = None
         else:
             self.localproxy['noproxy'] = str(self.sysproxy.noproxy) if not self.sysproxy.noproxy is None else None
         self.update_actions_enabled()
@@ -950,4 +1104,12 @@ class MainWindow(BasicDialog):
             self.localproxy['noproxy'] = ','.join(txt.split('\n'))
         else:
             self.localproxy['noproxy'] = None
-        self.update_actions_enabled()        
+        self.update_actions_enabled()
+
+    @Slot()
+    def on_btn_copyto(self):
+        prot = PROXY_OBJS[self.btns_protocol.checkedId()]
+        for prot_other in PROXY_OBJS[:-1]:
+            if prot_other == prot: continue
+            self.localproxy[prot_other] = self.localproxy[prot].copy()
+        self.settings_to_gui()
