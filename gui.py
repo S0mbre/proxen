@@ -817,7 +817,24 @@ class MainWindow(BasicDialog):
         self.lo_wconfig.addLayout(self.lo_loadsave)
 
         self.wconfig.setLayout(self.lo_wconfig)
-        self.tb.addItem(self.wconfig, 'Settings')
+        self.tb.addItem(self.wconfig, 'Proxies')
+
+        # 2) app settings page
+        self.wappconfig = QtWidgets.QWidget()
+        self.lo_wappconfig = QtWidgets.QVBoxLayout()
+
+        self.chb_debug = QtWidgets.QCheckBox('Debug messages to console')
+        self.chb_debug.setToolTip('Setting will apply after app restart')
+        self.chb_debug.setChecked(utils.DEBUG)
+        self.lo_wappconfig.addWidget(self.chb_debug)
+        self.chb_log = QtWidgets.QCheckBox('Write log to log.txt')
+        self.chb_log.setToolTip(self.chb_debug.toolTip())
+        self.chb_log.setChecked(not utils.LOGFILE is None)
+        self.lo_wappconfig.addWidget(self.chb_log)
+        self.lo_wappconfig.addStretch()
+
+        self.wappconfig.setLayout(self.lo_wappconfig)
+        self.tb.addItem(self.wappconfig, 'Settings')
 
         # ----
         self.layout_controls.addWidget(self.tb)
@@ -856,6 +873,12 @@ class MainWindow(BasicDialog):
         self.settings_to_gui()
 
     def closeEvent(self, event):
+        # apply app config
+        utils.CONFIG['app']['debug'] = self.chb_debug.isChecked()
+        utils.CONFIG['app']['logfile'] = 'log.txt' if self.chb_log.isChecked() else None
+        utils.config_save()
+
+        # apply proxy config
         if self.thread_apply.isRunning():
             self.thread_apply.wait()
         if self.sysproxy.asdict() != self.localproxy:
@@ -960,7 +983,7 @@ class MainWindow(BasicDialog):
 
     @Slot(int)
     def tb_currentChanged(self, index):
-        self.setFixedHeight(250 if index == 0 else 550)
+        self.setFixedHeight(250 if index != 1 else 550)
 
     @Slot(int, bool)
     def on_btns_protocol_selected(self, index, checked):
