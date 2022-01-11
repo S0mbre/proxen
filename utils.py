@@ -1,12 +1,30 @@
 # -*- coding: utf-8 -*-
 import os, logging
+from config import *
 
 # --------------------------------------------------------------- #
 
+DEBUG = CONFIG['app'].getboolean('debug', fallback=False) if 'app' in CONFIG else False
 NL = '\n'
 CODING = 'utf-8'
+LOGMSGFORMAT = '[{asctime}] {levelname}: {message}'
+LOGFILE = CONFIG['app'].get('logfile', None) if 'app' in CONFIG else None
 
-logging.basicConfig(encoding='utf-8', level=logging.DEBUG, format='[%(asctime)s] %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter(fmt=LOGMSGFORMAT, datefmt='%Y-%m-%d %H:%M:%S', style='{')
+
+if DEBUG:
+    ch_debug = logging.StreamHandler()
+    ch_debug.setLevel(logging.DEBUG)
+    ch_debug.setFormatter(formatter)
+    logger.addHandler(ch_debug)
+
+if LOGFILE:
+    ch_logfile = logging.FileHandler(os.path.abspath(LOGFILE), mode='w', encoding=CODING, delay=True)
+    ch_logfile.setLevel(logging.DEBUG)
+    ch_logfile.setFormatter(formatter)
+    logger.addHandler(ch_logfile)
 
 # --------------------------------------------------------------- #
 
@@ -17,18 +35,19 @@ def make_abspath(filename, root=''):
 # --------------------------------------------------------------- #
 
 def log(what, how='info', *args, **kwargs):
+    logger = logging.getLogger()
     if how == 'info':
-        logging.info(what, *args, **kwargs)
+        logger.info(what, *args, **kwargs)
     elif how == 'warn':
-        logging.warning(what, *args, **kwargs)
+        logger.warning(what, *args, **kwargs)
     elif how == 'error':
-        logging.error(what, *args, **kwargs)
+        logger.error(what, *args, **kwargs)
     elif how == 'debug':
-        logging.debug(what, *args, **kwargs)
+        logger.debug(what, *args, **kwargs)
     elif how == 'critical':
-        logging.critical(what, *args, **kwargs)
+        logger.critical(what, *args, **kwargs)
     elif how == 'exception':
-        logging.exception(what, *args, **kwargs)
+        logger.exception(what, *args, **kwargs)
 
 # --------------------------------------------------------------- #    
 
