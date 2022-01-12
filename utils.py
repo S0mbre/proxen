@@ -61,7 +61,7 @@ def has_admin():
         else:
             return (os.environ['USERNAME'], True)
     else:
-        if 'SUDO_USER' in os.environ and os.geteuid() == 0:
-            return (os.environ['SUDO_USER'], True)
+        if os.geteuid() == 0:
+            return (os.environ['USER'], True)
         else:
-            return (os.environ['USERNAME'], False)    
+            return (os.environ['USER'], False)    
