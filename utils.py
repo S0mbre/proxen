@@ -7,7 +7,7 @@ from config import *
 DEBUG = CONFIG['app'].getboolean('debug', fallback=False) if 'app' in CONFIG else False
 NL = '\n'
 CODING = 'utf-8'
-LOGMSGFORMAT = '[{asctime}] {levelname}: {message}'
+LOGMSGFORMAT = '[{asctime}] {message}'
 LOGFILE = CONFIG['app'].get('logfile', None) if 'app' in CONFIG else None
 
 logger = logging.getLogger()

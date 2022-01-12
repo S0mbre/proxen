@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os, json, struct
 import traceback
+
 from qtimports import *
 import utils
 import sysproxy
@@ -462,7 +463,7 @@ class TestEnv(BasicDialog):
             for env_name in lst_envs:
                 item0 = QtWidgets.QTableWidgetItem(env_name)
                 item1 = QtWidgets.QTableWidgetItem('user' if k == 0 else 'system')
-                val = lst_envs[env_name][0]
+                val = lst_envs[env_name]
                 if isinstance(val, str):
                     sval = val
                 elif isinstance(val, bytes):
@@ -640,7 +641,7 @@ class MainWindow(BasicDialog):
         self.sysproxy = sysproxy.Proxy()
         self.localproxy = self.sysproxy.asdict()
         rec = QtGui.QGuiApplication.primaryScreen().geometry()
-        self.thread_apply = QThreadStump(on_run=None, on_start=None,
+        self.thread_apply = QThreadStump(on_run=None, on_start=self._on_apply_start,
                                          on_finish=self._on_apply_finish, on_error=self._on_apply_finish)
         super().__init__(title='Proxen!', icon='proxen.png', geometry=(rec.width() // 2 - 175, rec.height() // 2 - 125, 350, 550),
                          flags=QtCore.Qt.Dialog | QtCore.Qt.MSWindowsFixedSizeDialogHint)
@@ -650,6 +651,10 @@ class MainWindow(BasicDialog):
 
     def addMainLayout(self):
         self.layout_controls = QtWidgets.QVBoxLayout()
+
+        self.loading_widget = QSvgWidget(utils.make_abspath('resources/loading.svg'))
+        self.loading_widget.renderer().setAspectRatioMode(QtCore.Qt.AspectRatioMode.KeepAspectRatio)
+        self.loading_widget.setWindowFlags(QtCore.Qt.SplashScreen | QtCore.Qt.FramelessWindowHint)
 
         self.tb = QtWidgets.QToolBox()
         self.tb.currentChanged.connect(self.tb_currentChanged)
@@ -842,13 +847,21 @@ class MainWindow(BasicDialog):
 
     def _do_apply_config(self):
         self.sysproxy.fromdict(self.localproxy)
+        # time.sleep(5)        
 
     def _do_restore_config(self):
         self.sysproxy.restore()
 
     def _on_apply_finish(self):
         self.localproxy = self.sysproxy.asdict()
+        self.loading_widget.hide()
+        self.setVisible(True)
         self.settings_to_gui()
+
+    def _on_apply_start(self):
+        self.setVisible(False)
+        self.loading_widget.setGeometry(self.x(), self.y(), self.width(), self.height())
+        self.loading_widget.show()
 
     def apply_config(self):
         if self.thread_apply.isRunning():
@@ -864,6 +877,11 @@ class MainWindow(BasicDialog):
         # self.thread_apply.on_finish = self._on_apply_finish
         self.thread_apply.start()
 
+    def save_app_settings(self):
+        utils.CONFIG['app']['debug'] = str(self.chb_debug.isChecked()).lower()
+        utils.CONFIG['app']['logfile'] = 'log.txt' if self.chb_log.isChecked() else None
+        utils.config_save()
+
     # ============================================= SLOTS ================================================================ #
 
     def showEvent(self, event):
@@ -874,9 +892,7 @@ class MainWindow(BasicDialog):
 
     def closeEvent(self, event):
         # apply app config
-        utils.CONFIG['app']['debug'] = self.chb_debug.isChecked()
-        utils.CONFIG['app']['logfile'] = 'log.txt' if self.chb_log.isChecked() else None
-        utils.config_save()
+        self.save_app_settings()
 
         # apply proxy config
         if self.thread_apply.isRunning():
@@ -887,6 +903,7 @@ class MainWindow(BasicDialog):
                                                 'APPLY system proxy configuration before quit?',
                                                 defaultButton=QtWidgets.QMessageBox.Yes)
             self.thread_apply.on_run = self._do_apply_config if btn == QtWidgets.QMessageBox.Yes else self._do_restore_config
+            self.thread_apply.on_start = None
             self.thread_apply.on_finish = None
             self.thread_apply.on_error = None
             self.thread_apply.start()
@@ -922,10 +939,11 @@ class MainWindow(BasicDialog):
     @Slot()
     def on_btn_OK_clicked(self):
         if not self.validate(): return
+        self.save_app_settings()
         if self.sysproxy.asdict() != self.localproxy:
             btn = QtWidgets.QMessageBox.question(self, 'Apply proxy settings',
-                                                    'APPLY proxy configuration and quit?',
-                                                    defaultButton=QtWidgets.QMessageBox.Yes)
+                                                 'APPLY proxy configuration and quit?',
+                                                 defaultButton=QtWidgets.QMessageBox.Yes)
             if btn != QtWidgets.QMessageBox.Yes:
                 return
 
@@ -941,10 +959,11 @@ class MainWindow(BasicDialog):
 
     @Slot()
     def on_btn_cancel_clicked(self):
+        self.save_app_settings()
         if self.sysproxy.asdict() != self.localproxy:
             btn = QtWidgets.QMessageBox.question(self, 'Cancel proxy settings',
-                                                    'RESTORE system proxy configuration and quit?',
-                                                    defaultButton=QtWidgets.QMessageBox.Yes)
+                                                 'RESTORE system proxy configuration and quit?',
+                                                 defaultButton=QtWidgets.QMessageBox.Yes)
             if btn != QtWidgets.QMessageBox.Yes:
                 return
             if self.thread_apply.isRunning():
