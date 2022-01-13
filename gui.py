@@ -674,7 +674,7 @@ class MainWindow(BasicDialog):
         rec = QtGui.QGuiApplication.primaryScreen().geometry()
         self.thread_apply = QThreadStump(on_run=None, on_start=self._on_apply_start,
                                          on_finish=self._on_apply_finish, on_error=self._on_apply_finish)
-        super().__init__(title='Proxen!', icon='proxen.png', geometry=(rec.width() // 2 - 175, rec.height() // 2 - 125, 350, 550),
+        super().__init__(title='Proxen!', icon='proxen.png', geometry=(rec.width() // 2 - 225, rec.height() // 2 - 100, 450, 600),
                          flags=QtCore.Qt.Dialog | QtCore.Qt.MSWindowsFixedSizeDialogHint)
         self.btn_OK.setToolTip('Apply changes and quit')
         self.btn_cancel.setToolTip('Cancel changes and quit')
@@ -706,7 +706,7 @@ class MainWindow(BasicDialog):
         self.btn_enable_proxy = QtWidgets.QToolButton()
         self.btn_enable_proxy.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
         # self.btn_enable_proxy.setFixedSize(64, 64)
-        self.btn_enable_proxy.setIconSize(QtCore.QSize(64, 64))
+        self.btn_enable_proxy.setIconSize(QtCore.QSize(54, 54))
         self.btn_enable_proxy.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed))
         self.btn_enable_proxy.setDefaultAction(self.act_enable_proxy)
         self.btn_enable_proxy.setStyleSheet('QToolButton { border: null; padding: 0px } ')
@@ -819,7 +819,7 @@ class MainWindow(BasicDialog):
         self.act_apply.triggered.connect(self.on_act_apply)
         self.btn_apply = QtWidgets.QToolButton()
         self.btn_apply.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
-        self.btn_apply.setFixedWidth(70)
+        self.btn_apply.setFixedWidth(90)
         self.btn_apply.setDefaultAction(self.act_apply)
         self.lo_loadsave.addWidget(self.btn_apply)
 
@@ -828,7 +828,7 @@ class MainWindow(BasicDialog):
         self.act_restore.triggered.connect(self.on_act_restore)
         self.btn_restore = QtWidgets.QToolButton()
         self.btn_restore.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
-        self.btn_restore.setFixedWidth(70)
+        self.btn_restore.setFixedWidth(90)
         self.btn_restore.setDefaultAction(self.act_restore)
         self.lo_loadsave.addWidget(self.btn_restore)
 
@@ -837,7 +837,7 @@ class MainWindow(BasicDialog):
         self.act_saveconfig.triggered.connect(self.on_act_saveconfig)
         self.btn_saveconfig = QtWidgets.QToolButton()
         self.btn_saveconfig.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
-        self.btn_saveconfig.setFixedWidth(70)
+        self.btn_saveconfig.setFixedWidth(90)
         self.btn_saveconfig.setDefaultAction(self.act_saveconfig)
         self.lo_loadsave.addWidget(self.btn_saveconfig)
 
@@ -846,7 +846,7 @@ class MainWindow(BasicDialog):
         self.act_loadconfig.triggered.connect(self.on_act_loadconfig)
         self.btn_loadconfig = QtWidgets.QToolButton()
         self.btn_loadconfig.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
-        self.btn_loadconfig.setFixedWidth(70)
+        self.btn_loadconfig.setFixedWidth(90)
         self.btn_loadconfig.setDefaultAction(self.act_loadconfig)
         self.lo_loadsave.addWidget(self.btn_loadconfig)
 
@@ -1033,7 +1033,7 @@ class MainWindow(BasicDialog):
 
     @Slot(int)
     def tb_currentChanged(self, index):
-        self.setFixedHeight(250 if index != 1 else 550)
+        self.setFixedHeight(250 if index != 1 else 600)
 
     @Slot(int, bool)
     def on_btns_protocol_selected(self, index, checked):
@@ -1106,13 +1106,13 @@ class MainWindow(BasicDialog):
             port_ = self.le_proxyport.value()
             self.localproxy[prot] = sysproxy.Proxyconf(None, prot_, host_,
                                                        port_, self.gb_auth.isChecked(),
-                                                       self.le_user.text(), self.le_pass.text())
+                                                       self.le_user.text(), self.le_pass.text()).asdict()
         self.update_actions_enabled()
 
     @Slot(int)
     def on_le_proxyport_changed(self, value):
         prot = PROXY_OBJS[self.btns_protocol.checkedId()]
-        proxy_obj = self.localproxy.get(prot, None)
+        proxy_obj: sysproxy.Proxyconf = self.localproxy.get(prot, None)
         if not proxy_obj is None:
             proxy_obj['port'] = value
         else:
@@ -1121,7 +1121,7 @@ class MainWindow(BasicDialog):
             port_ = value
             self.localproxy[prot] = sysproxy.Proxyconf(None, prot_, host_,
                                                        port_, self.gb_auth.isChecked(),
-                                                       self.le_user.text(), self.le_pass.text())
+                                                       self.le_user.text(), self.le_pass.text()).asdict()
         self.update_actions_enabled()
 
     @Slot(bool)
@@ -1136,7 +1136,7 @@ class MainWindow(BasicDialog):
             port_ = self.le_proxyport.value()
             self.localproxy[prot] = sysproxy.Proxyconf(None, prot_, host_,
                                                        port_, self.gb_auth.isChecked(),
-                                                       self.le_user.text(), self.le_pass.text())
+                                                       self.le_user.text(), self.le_pass.text()).asdict()
             self.update_actions_enabled()
 
     @Slot(bool)

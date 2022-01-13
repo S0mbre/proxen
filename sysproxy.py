@@ -511,7 +511,7 @@ class Sysproxy:
             res = self.win_get_reg_proxy('ProxyOverride')
             return None if res is None else Noproxy(None, res)
         res = self.get_sys_env('no_proxy')
-        return None if res is None else Noproxy(None, res)
+        return None if res is None else Noproxy(None, res['user'] or res['system'] or '')
 
     def get_sys_proxy_parsed(self, proxy='http_proxy') -> Proxyconf:
         _proxy = self.get_sys_http_proxy() if proxy == 'http_proxy' else self.get_sys_env(proxy)
