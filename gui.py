@@ -391,12 +391,17 @@ class TestEnv(BasicDialog):
                                           on_finish=self.update_envlist, on_error=self.update_envlist)
         self.thread_action = QThreadStump(on_run=None, on_start=self.update_actions,
                                           on_finish=self.refresh_vars_gui, on_error=self.refresh_vars_gui)
+        self.has_changed = False
         super().__init__(title='SysEnv', icon='settings.png')
 
     def addMainLayout(self):
-        self.layout_controls = QtWidgets.QHBoxLayout()
+        self.layout_controls = QtWidgets.QVBoxLayout()
+        self.layout_controls.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
+
+        self.lo_controls = QtWidgets.QHBoxLayout()
 
         self.tw_envs = QtWidgets.QTableWidget(0, 3)
+        self.tw_envs.setMinimumSize(200, 400)
         self.tw_envs.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.tw_envs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.tw_envs.setSortingEnabled(True)
@@ -404,7 +409,7 @@ class TestEnv(BasicDialog):
         self.tw_envs.itemChanged.connect(self.tw_itemChanged)
         self.tw_envs.setHorizontalHeaderLabels(['Variable', 'Domain', 'Value'])
         self.tw_envs.horizontalHeader().setStretchLastSection(True)
-        self.layout_controls.addWidget(self.tw_envs)
+        self.lo_controls.addWidget(self.tw_envs)
 
         self.tbar = QtWidgets.QToolBar()
         self.tbar.setOrientation(QtCore.Qt.Vertical)
@@ -429,7 +434,17 @@ class TestEnv(BasicDialog):
         self.act_delete.triggered.connect(self.on_act_delete)
         self.tbar.addAction(self.act_delete)
 
-        self.layout_controls.addWidget(self.tbar)
+        self.lo_controls.addWidget(self.tbar)
+        self.layout_controls.addLayout(self.lo_controls)
+
+        self.l_warning = QtWidgets.QLabel()
+        # self.l_warning.setWordWrap(True)
+        self.l_warning.setMinimumHeight(50)
+        self.l_warning.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        self.l_warning.setAlignment(QtCore.Qt.AlignHCenter)
+        self.l_warning.hide()
+
+        self.layout_controls.addWidget(self.l_warning, alignment=QtCore.Qt.AlignCenter)
 
     def showEvent(self, event):
         # show
@@ -503,6 +518,7 @@ class TestEnv(BasicDialog):
             return
         while self.thread_action.isRunning():
             self.thread_action.wait()
+        self.update_warning()
         self.thread_update.start()
 
     def unset_vars(self, varnames):
@@ -513,16 +529,19 @@ class TestEnv(BasicDialog):
                 if var[1] == 'system':
                     modes.append('system')
                 self.sysproxy.unset_sys_env(var[0], modes, False)
+        self.has_changed = True
         return do_unser_vars
 
     def set_var(self, varname, value, modes=('user',)):
         def do_set_var():
             self.sysproxy.set_sys_env(varname, value, modes, False)
+        self.has_changed = True
         return do_set_var
 
     def create_var(self, varname, value, valtype, modes=('user',)):
         def do_create_var():
             self.sysproxy.set_sys_env(varname, value, True, valtype, modes, False)
+        self.has_changed = True
         return do_create_var
 
     # ============================================= SLOTS ================================================================ #
@@ -534,6 +553,18 @@ class TestEnv(BasicDialog):
         self.act_delete.setEnabled(not running and cnt_sel > 2)
         self.act_refresh.setEnabled(not running)
         self.act_add.setEnabled(not running)
+
+    @Slot()
+    def update_warning(self):
+        if (not self.has_changed and not sysproxy.CURRENT_USER[1]):
+            return
+        txt = ''
+        if sysproxy.CURRENT_USER[1]:
+            txt = 'SuperUser privileges active!<br>'
+        if self.has_changed and sysproxy.OS != 'Windows':
+            txt += 'Relogin to apply changes to OS!'
+        self.l_warning.setText(f'<span style="font-size:12pt; font-weight:600; color:red;">{txt}</span>')
+        self.l_warning.show()
 
     @Slot(bool)
     def on_act_refresh(self, checked):

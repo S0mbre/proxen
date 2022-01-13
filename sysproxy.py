@@ -5,6 +5,9 @@ from collections.abc import Callable
 
 OS = platform.system()
 
+if not OS in ('Windows', 'Linux', 'Darwin'):
+    raise Exception(f'Your platform ({OS}) is not [yet] supported, sorry! ((')
+
 if OS == 'Windows':
     import winreg
     WIN_REG_BRANCHES = {'HKEY_CLASSES_ROOT': winreg.HKEY_CLASSES_ROOT,
@@ -28,8 +31,20 @@ WIN_PROXY_KEY = r'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
 WIN_ENV_LOCAL_KEY = 'Environment' # HKCU branch
 WIN_ENV_SYSTEM_KEY = r'SYSTEM\CurrentControlSet\Control\Session Manager\Environment' # HKLM branch
 WIN_DUMMY_KEYNAME = 'ttt'
+
 UNIX_LOCAL_FILE = '~/.profile'
-UNIX_PROFILE_FILES = ['~/.profile', '~/.bashrc', '~/.zshrc', '/etc/profile', '/etc/environment', '/etc/bash.bashrc', '/etc/zsh/zshrc']
+if OS != 'Windows':
+    shenv = os.environ.get('SHELL', None)
+    if shenv:
+        shell = shenv.split(os.sep)[-1].lower()
+        if shell == 'bash':
+            UNIX_LOCAL_FILE = '~/.bashrc'
+        elif shell == 'zsh':
+            UNIX_LOCAL_FILE = '~/.zshrc'
+        elif shell == 'csh':
+            UNIX_LOCAL_FILE = '~/.cshrc'
+UNIX_PROFILE_FILES_USR = ['~/.profile', '~/.bashrc', '~/.bash_profile', '~/.zshrc', '~/.cshrc', '~/.tcshrc', ' ~/.login']
+UNIX_PROFILE_FILES_SYS = ['/etc/profile', '/etc/environment', '/etc/bash.bashrc', '/etc/bashrc', '/etc/zsh/zshrc', '/etc/csh.cshrc', '/etc/csh.login']
 REGEX_PROXY_EXPORT = r'(export\s{}=)(.*)'
 
 # --------------------------------------------------------------- #
@@ -114,7 +129,7 @@ class Noproxy(Dclass):
 class Sysproxy:
 
     def __init__(self, update_now=True, unix_file=UNIX_LOCAL_FILE):
-        self.unix_file = os.path.abspath(unix_file)
+        self.unix_file = os.path.expanduser(unix_file)
         self.locals = {}
         self.globals = {}
         if update_now: self.update_vars()
@@ -129,22 +144,9 @@ class Sysproxy:
             self.locals = self.win_list_reg(WIN_ENV_LOCAL_KEY) or {}
             self.globals = self.win_list_reg(WIN_ENV_SYSTEM_KEY, 'HKLM') or {}
         else:
-            local_files = {'~/.profile', '~/.bashrc', '~/.zshrc'}
-            global_files = {'/etc/profile', '/etc/environment', '/etc/bash.bashrc', '/etc/zsh/zshrc'}
-            if self._unix_write_local():
-                local_files.add(self.unix_file)
-            else:
-                global_files.add(self.unix_file)
+            # subprocess.run(f'source {self.unix_file}', shell=True, executable='/bin/bash')
+            self.locals.update(**os.environ)
 
-            for fname in local_files:
-                res = self.unix_get_envs(fname)
-                if res:
-                    self.locals.update(res)
-            
-            for fname in global_files:
-                res = self.unix_get_envs(fname)
-                if res:
-                    self.globals.update(res)
         utils.log('Env variables updated', 'debug')
 
     def get_env(self, envname, case_sensitive=False, modes=('user', 'system'), default=None): 
@@ -155,50 +157,28 @@ class Sysproxy:
             res = self.globals.get(envname, default if case_sensitive else self.globals.get(envname.upper(), self.globals.get(envname.lower(), default)))
         return res
 
-    def unix_get_envs(self, filepath) -> dict:
-        if OS == 'Windows':
-            raise Exception('This method is only for UNIX platforms!')
-        if not os.path.isfile(filepath):
-            return False
-        try:
-            res = {}
-            with open(filepath, 'r', encoding=utils.CODING) as f_:
-                ftext = f_.read().strip()
-            reg = re.compile(r'^export\s([\w\d_]+)=(.*)$', re.I)
-            for m in reg.finditer(ftext):
-                if m:
-                    res[m[1]] = m[2]
-            return res
-        except:
-            traceback.print_exc()
-            return None
-
     def unix_del_env(self, envname, modes=('user',)) -> bool:
         if OS == 'Windows':
             raise Exception('This method is only for UNIX platforms!')
         if ('system' in modes) and (not CURRENT_USER[1]):
             raise Exception('Cannot modify system files: SU privilege asked!')
         try:
-            reg = re.compile(r'^export\s{}=(.*)$'.format(envname), re.I)
-            local_files = {'~/.profile', '~/.bashrc', '~/.zshrc'}
-            global_files = {'/etc/profile', '/etc/environment', '/etc/bash.bashrc', '/etc/zsh/zshrc'}
-            if self._unix_write_local():
-                local_files.add(self.unix_file)
-            else:
-                global_files.add(self.unix_file)
+            reg = re.compile(r'^\s*export\s{}.*$'.format(envname), re.I | re.MULTILINE)
             for mode in modes:
                 if mode == 'user':
-                    file_list = local_files
+                    file_list = UNIX_PROFILE_FILES_USR
                 elif mode == 'system':
-                    file_list = global_files
+                    file_list = UNIX_PROFILE_FILES_SYS
                 else:
                     continue
                 for fname in file_list: 
+                    fname = os.path.expanduser(fname)
+                    if not os.path.isfile(fname): continue
                     with open(fname, 'r', encoding=utils.CODING) as f_:
                         ftext = f_.read().strip()
-                    if not reg.match(ftext):
+                    if reg.search(ftext) is None:
                         continue
-                    ftext = reg.sub('\n', ftext)
+                    ftext = reg.sub('\n:', ftext)
                     with open(fname, 'w', encoding=utils.CODING) as f_:
                         f_.write(ftext)
                     utils.log(f'Deleted env "{envname}" from file "{fname}"', 'debug')
@@ -209,10 +189,10 @@ class Sysproxy:
 
     def unix_write_env(self, filepath, envname, value) -> bool:
         if OS == 'Windows':
-            raise Exception('This method is only for UNIX platforms!')
+            raise Exception('This method is only for UNIX platforms!')        
+        filepath = os.path.abspath(os.path.expanduser(filepath))
         if not os.path.isfile(filepath):
             return False
-        filepath = os.path.abspath(filepath)
         wr_local = not filepath.startswith('/etc')
         if not wr_local and not CURRENT_USER[1]:
             raise Exception(f'Cannot write to {filepath}: SU privilege asked!')
@@ -223,7 +203,7 @@ class Sysproxy:
             # 2 - write env to indicated file
             with open(filepath, 'a', encoding=utils.CODING) as f_:               
                 for e_ in (envname.lower(), envname.upper()):
-                    f_.write(f'{utils.NL}export {e_}="{value}"{utils.NL}')
+                    f_.write(f'{utils.NL}export {e_}="{value}"')
 
             utils.log(f'Written env "{envname}" = "{value}" to file "{filepath}"', 'debug')
             return True
@@ -485,7 +465,7 @@ class Sysproxy:
         if res:
             for e_ in {envname, envname.lower(), envname.upper()}:
                 if e_ in os.environ:
-                    del os.environ[e_]
+                    os.environ.pop(e_, None)
 
         if update_vars: self.update_vars()
         utils.log(f'Delete system env "{envname}"', 'debug')
@@ -523,7 +503,8 @@ class Sysproxy:
             return bool(res)
 
         # Linux doesn't have separate 'proxy enable' switch, so try to get 'http_proxy' ENV...
-        return (not self.get_sys_http_proxy() is None)
+        env = self.get_sys_http_proxy()
+        return not (env['user'] is None and env['system'] is None)
 
     def get_sys_noproxy(self) -> Noproxy:
         if OS == 'Windows':
