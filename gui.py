@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 ## @package proxen.gui
 # @brief The GUI app main window implementation -- see MainWindow class.
-import os, json, struct
+import os, json, struct, webbrowser
 import traceback
 
 from qtimports import *
@@ -895,7 +895,7 @@ class MainWindow(BasicDialog):
         ## `gui::QThreadStump` thread to apply proxy changes to system
         self.thread_apply = QThreadStump(on_run=None, on_start=self._on_apply_start,
                                          on_finish=self._on_apply_finish, on_error=self._on_apply_finish)
-        super().__init__(title='Proxen!', icon='proxen.png', geometry=(rec.width() // 2 - 225, rec.height() // 2 - 100, 450, 600),
+        super().__init__(title='Proxen!', icon='proxen.png', geometry=(rec.width() // 2 - 225, rec.height() // 2 - 100, 500, 600),
                          flags=QtCore.Qt.Dialog | QtCore.Qt.MSWindowsFixedSizeDialogHint)
         self.btn_OK.setToolTip('Apply changes and quit')
         self.btn_cancel.setToolTip('Cancel changes and quit')
@@ -1100,9 +1100,26 @@ class MainWindow(BasicDialog):
         self.lo_wappconfig.addWidget(self.btn_envedit)
 
         self.lo_wappconfig.addStretch()
-
         self.wappconfig.setLayout(self.lo_wappconfig)
         self.tb.addItem(self.wappconfig, 'Settings')
+
+        ## `QtWidgets.QWidget` help page
+        self.whelp = QtWidgets.QWidget()
+        self.lo_whelp = QtWidgets.QVBoxLayout()
+
+        self.act_help = QAction(QtGui.QIcon("resources/info1.png"), 'Open docs')
+        self.act_help.setShortcuts(QtGui.QKeySequence.HelpContents)
+        self.act_help.setToolTip('Read proxen documentation')
+        self.act_help.triggered.connect(self.on_act_help)
+        self.btn_help = QtWidgets.QToolButton()
+        self.btn_help.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        self.btn_help.setFixedWidth(150)
+        self.btn_help.setDefaultAction(self.act_help)
+        self.lo_whelp.addWidget(self.btn_help)
+
+        self.lo_whelp.addStretch()
+        self.whelp.setLayout(self.lo_whelp)
+        self.tb.addItem(self.whelp, 'Help')
 
         self.layout_controls.addWidget(self.tb)
         # self.layout_controls.addStretch()
@@ -1279,7 +1296,7 @@ class MainWindow(BasicDialog):
     ## Triggers when the `MainWindow::tb` toolbox is changed by selecting a group.
     @Slot(int)
     def tb_currentChanged(self, index):
-        self.setFixedHeight(250 if index != 1 else 600)
+        self.setFixedHeight(300 if index != 1 else 600)
 
     ## Triggers when a proxy radio button is checked to show the settings
     # for the corresponding proxy.
@@ -1453,3 +1470,8 @@ class MainWindow(BasicDialog):
     @Slot(bool)
     def on_act_envedit(self, checked):
         TestEnv().exec()
+
+    ## `MainWindow::act_help` handler: shows help docs in browser 
+    @Slot(bool)
+    def on_act_help(self, checked):
+        webbrowser.open(os.path.join('file:///', utils.make_abspath('doc/html'), 'index.html'), new=2)

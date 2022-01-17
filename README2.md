@@ -1,5 +1,5 @@
 
-# What is proxen?
+# {#index}
 
 **proxen** is a small GUI tool to configure the web proxy settings on your system. Written completely in Python and relying on Qt5/6 for GUI, it works on any OS: Windows, Linux and Mac.
 
@@ -58,16 +58,16 @@ If you downloaded a ZIP release, go to `https://github.com/S0mbre/proxen/release
 The user interface is very intuitive.
 
 ### Enable / disable proxy with a single click
-![](/resources/screen_01.png)
+![](../resources/screen_01.png)
 
 ### Configure different proxies
-![](/resources/screen_02.png)
+![](../resources/screen_02.png)
 
 ### App settings
-![](/resources/screen_03.png)
+![](../resources/screen_03.png)
 
 ### Getting help
-![](/resources/screen_04.png)
+![](../resources/screen_04.png)
 
 ### Manual environment variable editing
-![](/resources/screen_05.png)
+![](../resources/screen_05.png)
