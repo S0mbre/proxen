@@ -14,5 +14,6 @@ var searchData=
   ['update_5fenvlist_11',['update_envlist',['../classproxen_1_1gui_1_1_test_env.html#ab022304538545b6c0076a73f79f8cad9',1,'proxen::gui::TestEnv']]],
   ['update_5fvars_12',['update_vars',['../classproxen_1_1sysproxy_1_1_sysenv.html#a50181251e575ca32dbb46d6a0415bd3b',1,'proxen::sysproxy::Sysenv']]],
   ['update_5fwarning_13',['update_warning',['../classproxen_1_1gui_1_1_test_env.html#a14bab2b20a68636cbfbf5f96cc1f9def',1,'proxen::gui::TestEnv']]],
-  ['utils_2epy_14',['utils.py',['../utils_8py.html',1,'']]]
+  ['using_20proxen_14',['Using proxen',['../index.html',1,'']]],
+  ['utils_2epy_15',['utils.py',['../utils_8py.html',1,'']]]
 ];

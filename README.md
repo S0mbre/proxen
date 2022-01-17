@@ -70,4 +70,9 @@ The user interface is very intuitive.
 ![](/resources/screen_04.png)
 
 ### Manual environment variable editing
+
+Go to `Settings` page and press the `Env variables` button.
+
+Edit environment variables directly in the table, add and delete using the actions in the righthand panel.
+
 ![](/resources/screen_05.png)

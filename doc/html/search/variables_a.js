@@ -31,12 +31,13 @@ var searchData=
   ['lo_5fuser_28',['lo_user',['../classproxen_1_1gui_1_1_main_window.html#a1a68e41b934a5b037fdea205bbfcd572',1,'proxen::gui::MainWindow']]],
   ['lo_5fwappconfig_29',['lo_wappconfig',['../classproxen_1_1gui_1_1_main_window.html#a1da3e7c76ef5ebc1e4ab66d64079dfee',1,'proxen::gui::MainWindow']]],
   ['lo_5fwconfig_30',['lo_wconfig',['../classproxen_1_1gui_1_1_main_window.html#a478ed2b531a9d1114252e3001a020805',1,'proxen::gui::MainWindow']]],
-  ['lo_5fwmain_31',['lo_wmain',['../classproxen_1_1gui_1_1_main_window.html#a2c180e5b1b2d65214967eceb868304d7',1,'proxen::gui::MainWindow']]],
-  ['lo_5fwmain1_32',['lo_wmain1',['../classproxen_1_1gui_1_1_main_window.html#a705192264041f3de0bd2e14d52c25718',1,'proxen::gui::MainWindow']]],
-  ['loading_5fwidget_33',['loading_widget',['../classproxen_1_1gui_1_1_main_window.html#acdc68b6ddecb00d9316eb063e445b948',1,'proxen::gui::MainWindow']]],
-  ['localproxy_34',['localproxy',['../classproxen_1_1gui_1_1_main_window.html#aafbae756c539efd25bbcaa29734fe1eb',1,'proxen::gui::MainWindow']]],
-  ['locals_35',['locals',['../classproxen_1_1sysproxy_1_1_sysenv.html#a3babd0076034e088c354dad6f81290a2',1,'proxen::sysproxy::Sysenv']]],
-  ['logfile_36',['LOGFILE',['../namespaceproxen_1_1utils.html#a815157ceaf35711d4c8dc5cb7eecbf07',1,'proxen::utils']]],
-  ['logger_37',['logger',['../namespaceproxen_1_1utils.html#a9df29ebe9929ac89ceb2a007b70a68b2',1,'proxen::utils']]],
-  ['logmsgformat_38',['LOGMSGFORMAT',['../namespaceproxen_1_1utils.html#abe426d337a9442fdd6fd7ef36a68020a',1,'proxen::utils']]]
+  ['lo_5fwhelp_31',['lo_whelp',['../classproxen_1_1gui_1_1_main_window.html#a5cbac04252f036d6a12b31d0cc8cd3ce',1,'proxen::gui::MainWindow']]],
+  ['lo_5fwmain_32',['lo_wmain',['../classproxen_1_1gui_1_1_main_window.html#a2c180e5b1b2d65214967eceb868304d7',1,'proxen::gui::MainWindow']]],
+  ['lo_5fwmain1_33',['lo_wmain1',['../classproxen_1_1gui_1_1_main_window.html#a705192264041f3de0bd2e14d52c25718',1,'proxen::gui::MainWindow']]],
+  ['loading_5fwidget_34',['loading_widget',['../classproxen_1_1gui_1_1_main_window.html#acdc68b6ddecb00d9316eb063e445b948',1,'proxen::gui::MainWindow']]],
+  ['localproxy_35',['localproxy',['../classproxen_1_1gui_1_1_main_window.html#aafbae756c539efd25bbcaa29734fe1eb',1,'proxen::gui::MainWindow']]],
+  ['locals_36',['locals',['../classproxen_1_1sysproxy_1_1_sysenv.html#a3babd0076034e088c354dad6f81290a2',1,'proxen::sysproxy::Sysenv']]],
+  ['logfile_37',['LOGFILE',['../namespaceproxen_1_1utils.html#a815157ceaf35711d4c8dc5cb7eecbf07',1,'proxen::utils']]],
+  ['logger_38',['logger',['../namespaceproxen_1_1utils.html#a9df29ebe9929ac89ceb2a007b70a68b2',1,'proxen::utils']]],
+  ['logmsgformat_39',['LOGMSGFORMAT',['../namespaceproxen_1_1utils.html#abe426d337a9442fdd6fd7ef36a68020a',1,'proxen::utils']]]
 ];
