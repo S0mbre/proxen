@@ -1,17 +1,25 @@
 # -*- coding: utf-8 -*-
+## @package proxen.utils
+# @brief Globals and utility functions used across the app.
 import os, logging
 from config import *
 
 # --------------------------------------------------------------- #
 
+## `bool` debug mode switcher (`True` = print debug messages to console)
 DEBUG = CONFIG['app'].getboolean('debug', fallback=False) if 'app' in CONFIG else False
+## `str` newline symbol
 NL = '\n'
+## `str` default coding (for file IO)
 CODING = 'utf-8'
+## `str` log message mask
 LOGMSGFORMAT = '[{asctime}] {message}'
+## `str` log file name (relative to project dir); empty = no log output
 LOGFILE = CONFIG['app'].get('logfile', None) if 'app' in CONFIG else None
-
+## `logging.Logger` the global logger object
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
+## `logging.Formatter` logging formatter object
 formatter = logging.Formatter(fmt=LOGMSGFORMAT, datefmt='%Y-%m-%d %H:%M:%S', style='{')
 
 if DEBUG:
@@ -28,12 +36,26 @@ if LOGFILE:
 
 # --------------------------------------------------------------- #
 
+## Creates an absolute path given the root directory.
+# @param root `str` the root directory to form the abs path (empty = project directory)
+# @returns `str` the absolute file / folder path
 def make_abspath(filename, root=''):
     if not root: root = os.path.dirname(__file__)
     return os.path.abspath(os.path.join(root, filename) if filename else root)
 
 # --------------------------------------------------------------- #
 
+## Makes a log message using the global logger instance.
+# @param what `str` the message text
+# @param how `str` determines the log message type:
+# - `info`: information message (default)
+# - `warn`: warning message
+# - `error`: error message
+# - `debug`: debug message
+# - `critical`: critical message 
+# - `exception`: exception message
+# @param args `positional args` passed to the logger
+# @param kwargs `keyword args` passed to the logger
 def log(what, how='info', *args, **kwargs):
     logger = logging.getLogger()
     if how == 'info':
@@ -51,6 +73,10 @@ def log(what, how='info', *args, **kwargs):
 
 # --------------------------------------------------------------- #    
 
+## Checks if the current user has admin / root / SU privileges.
+# @returns `tuple` a 2-tuple of the following elements:
+# -# `str` current user name
+# -# `bool` whether the user has admin / root / SU privileges (`True`) or not (`False`)
 def has_admin():
     if os.name == 'nt':
         try:

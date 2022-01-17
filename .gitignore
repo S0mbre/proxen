@@ -6,3 +6,6 @@ dist/
 **/.vscode/
 *.json
 log.txt
+*.bat
+doc/doxyfile
+!doc/opendoc.bat

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+## @package proxen.gui
+# @brief The GUI app main window implementation -- see MainWindow class.
 import os, json, struct
 import traceback
 
@@ -8,44 +10,77 @@ import sysproxy
 
 # ******************************************************************************** #
 
+## `list` proxy variable names
 PROXY_OBJS = ['http_proxy', 'https_proxy', 'ftp_proxy', 'rsync_proxy', 'noproxy']
 
 # ******************************************************************************** #
 # *****          QThreadStump
 # ******************************************************************************** #
 
+## Customized thread class (based on QThread) that adds
+# progress, error etc. signals and mutex locking to avoid thread racing.
 class QThreadStump(QtCore.QThread):
 
     ## Error signal (args are: instance of this thread and the error message)
     sig_error = Signal(QtCore.QThread, str)
 
+    ## @param priority `int` thread default priority (default = normal)
+    # @param on_start `callable` callback function called before the main
+    # operation is executed (callback has no args or returned result)
+    # @param on_finish `callable` callback function called after the main
+    # operation completes (callback has no args or returned result)
+    # @param on_run `callable` callback function for the main
+    # operation (callback has no args or returned result)
+    # @param on_error `callable` callback function to handle exceptions
+    # raised during the thread operation (see QThreadStump::sig_error)
+    # @param start_signal `Signal` signal that can be connected to
+    # the `start` slot (if not `None`)
+    # @param stop_signal `Signal` signal that can be connected to
+    # the `terminate` slot (if not `None`)
+    # @param free_on_finish `bool` whether the thread instance will be deleted
+    # from memory after it completes its operation (default = `False`)    
+    # @param can_terminate `bool` whether the thread can be terminated (default = `True`)
+    # @param start_now `bool` whether to start the thread upon creation (default = `False`)
     def __init__(self, priority=QtCore.QThread.NormalPriority,
                  on_start=None, on_finish=None, on_run=None, on_error=None,
                  start_signal=None, stop_signal=None,
                  free_on_finish=False, can_terminate=True, start_now=False):
         super().__init__()
+        ## `int` thread default priority (default = normal)
         self.priority = priority
+        ## `callable` callback function executed before the thread runs
         self.on_start = on_start
+        ## `callable` callback function executed after the thread finishes
         self.on_finish = on_finish
+        ## `callable` callback function for the main operation
         self.on_run = on_run
+        ## `callable` callback function executed when an exception occurs
         self.on_error = on_error
+        ## `bool` whether the thread instance will be deleted from memory after it completes
         self.free_on_finish = free_on_finish
+        ## `bool` whether the thread can be terminated
         self.can_terminate = can_terminate
+        ## `Signal` signal that can be connected to the `start` slot (if not `None`)
         self.start_signal = start_signal
+        ## `Signal` signal that can be connected to the `terminate` slot (if not `None`)
         self.stop_signal = stop_signal
+        ## `QtCore.QMutex` mutex lock used by QThreadStump::lock() and QThreadStump::unlock()
         self.mutex = QtCore.QMutex()
         if start_now: self.start()
 
+    ## Destructor: waits for the thread to complete.
     def __del__(self):
         try:
             self.wait()
         except:
             pass
 
+    ## `int` getter for `QtCore.QThread.default_priority` (thread priority)
     @property
     def priority(self):
         return self.default_priority
 
+    ## sets `QtCore.QThread.default_priority` (thread priority)
     @priority.setter
     def priority(self, _priority):
         try:
@@ -53,98 +88,121 @@ class QThreadStump(QtCore.QThread):
         except:
             pass
 
+    ## `callable` getter for QThreadStump::_on_start
     @property
     def on_start(self):
         return self._on_start
 
+    ## setter for QThreadStump::_on_start
     @on_start.setter
     def on_start(self, _on_start):
         try:
             self.started.disconnect()
         except:
             pass
+        ## `callable` callback function executed before the thread runs
         self._on_start = _on_start
         if self._on_start:
             self.started.connect(self._on_start)
 
+    ## `callable` getter for QThreadStump::_on_finish
     @property
     def on_finish(self):
         return self._on_finish
 
+    ## setter for QThreadStump::_on_finish
     @on_finish.setter
     def on_finish(self, _on_finish):
         try:
             self.finished.disconnect()
         except:
             pass
+        ## `callable` callback function executed after the thread finishes
         self._on_finish = _on_finish
         if self._on_finish:
             self.finished.connect(self._on_finish)
         if getattr(self, '_free_on_finish', False):
             self.finished.connect(self.deleteLater)
 
+    ## `bool` getter for QThreadStump::_free_on_finish
     @property
     def free_on_finish(self):
         return self._free_on_finish
 
+    ## setter for QThreadStump::_free_on_finish
     @free_on_finish.setter
     def free_on_finish(self, _free_on_finish):
         try:
             self.finished.disconnect()
         except:
             pass
+        ## `bool` whether the thread instance will be deleted from memory after it completes
         self._free_on_finish = _free_on_finish
         if getattr(self, '_on_finish', None):
             self.finished.connect(self._on_finish)
         if self._free_on_finish:
             self.finished.connect(self.deleteLater)
 
+    ## `callable` getter for QThreadStump::_on_error
     @property
     def on_error(self):
         return self._on_error
 
+    ## setter for QThreadStump::_on_error
     @on_error.setter
     def on_error(self, _on_error):
         try:
             self.sig_error.disconnect()
         except:
             pass
+        ## `callable` callback function executed when an exception occurs
         self._on_error = _on_error
         if self._on_error:
             self.sig_error.connect(self._on_error)
 
+    ## `bool` getter for QThreadStump::_can_terminate
     @property
     def can_terminate(self):
         return self._can_terminate
 
+    ## setter for QThreadStump::_can_terminate
     @can_terminate.setter
     def can_terminate(self, _can_terminate):
         self.setTerminationEnabled(_can_terminate)
+        ## `bool` whether the thread can be terminated
         self._can_terminate = _can_terminate
 
+    ## `Signal` getter for QThreadStump::_start_signal
     @property
     def start_signal(self):
         return self._start_signal
 
+    ## setter for QThreadStump::_start_signal
     @start_signal.setter
     def start_signal(self, _start_signal):
+        ## `Signal` signal that can be connected to the `start` slot
         self._start_signal = _start_signal
         if self._start_signal:
             self._start_signal.connect(self.start)
 
+    ## `Signal` getter for QThreadStump::_stop_signal
     @property
     def stop_signal(self):
         return self._stop_signal
 
+    ## setter for QThreadStump::_stop_signal
     @stop_signal.setter
     def stop_signal(self, _stop_signal):
+        ## `Signal` signal that can be connected to the `terminate` slot
         self._stop_signal = _stop_signal
         if self._stop_signal:
             self._stop_signal.connect(self.terminate)
 
+    ## Locks the internal mutex to preclude data racing.
     def lock(self):
         self.mutex.lock()
 
+    ## Releases the mutex lock.
     def unlock(self):
         self.mutex.unlock()
 
@@ -165,15 +223,35 @@ class QThreadStump(QtCore.QThread):
 # *****          BrowseEdit
 # ******************************************************************************** #
 
+## @brief Edit field with internal 'Browse' button to file or folder browsing.
+# Inherited from `QtWidgets.QLineEdit`
 class BrowseEdit(QtWidgets.QLineEdit):
 
+    ## @param text `str` initial text in edit field (default = empty)
+    # @param parent `QtWidgets.QWidget` parent widget (default = `None`, i.e. no parent)
+    # @param dialogtype `str` path and dialog type:
+    #   * 'fileopen' = open file browse dialog
+    #   * 'filesave' = save file browse dialog
+    #   * 'folder' = folder browse dialog
+    # `None` = 'fileopen' (default)
+    # @param btnicon `str` icon file name in 'resources' directory
+    # `None` = 'resources/folder.png' (default)
+    # @param btnposition `int` browse button position:
+    #   * 0 (`QtWidgets.QLineEdit.LeadingPosition`) = left-aligned
+    #   * 1 (`QtWidgets.QLineEdit.TrailingPosition`) = right-aligned
+    # `None` = `QtWidgets.QLineEdit.TrailingPosition` (default)
+    # @param opendialogtitle `str` dialog title (`None` will use a default title)
+    # @param filefilters `str` file filters for file browse dialog, e.g.
+    # `"Images (*.png *.xpm *.jpg);;Text files (*.txt);;XML files (*.xml)"`\n
+    # `None` sets the default filter: `"All files (*.*)"`
+    # @param fullpath `bool` whether the full file / folder path will be returned
     def __init__(self, text='', parent=None,
                 dialogtype=None, btnicon=None, btnposition=None,
                 opendialogtitle=None, filefilters=None, fullpath=True):
         super().__init__(text, parent)
         ## `str` path and dialog type ('file' or 'folder')
         self.dialogtype = dialogtype or 'fileopen'
-        ## `str` icon file name in 'assets/icons'
+        ## `str` icon file name in 'resources' directory
         self.btnicon = btnicon or 'folder.png'
         ## `int` browse button position (0 or 1)
         self.btnposition = btnposition or QtWidgets.QLineEdit.TrailingPosition
@@ -181,16 +259,20 @@ class BrowseEdit(QtWidgets.QLineEdit):
         self._opendialogtitle = opendialogtitle
         ## `str` file filters for file browse dialog
         self._filefilters = filefilters
+        ## `bool` whether the full file / folder path will be returned
         self.fullpath = fullpath
+        ##  `QtWidgets.QWidget` the component edit delegate
         self.delegate = None
         self._set_title_and_filters()
         self.reset_action()
 
+    ## Updates the dialog's title and file filters.
     def _set_title_and_filters(self):
         self.opendialogtitle = getattr(self, 'opendialogtitle', None) or self._opendialogtitle or \
             ('Select file' if self.dialogtype.startswith('file') else 'Select folder')
         self.filefilters = getattr(self, 'filefilters', None) or self._filefilters or 'All files (*.*)'
 
+    ## Gets the start directory for the browse dialog.
     def _get_dir(self, text=None):
         if text is None: text = self.text()
         if text and not (os.path.isfile(text) or os.path.isdir(text)):
@@ -200,18 +282,20 @@ class BrowseEdit(QtWidgets.QLineEdit):
         else:
             return os.getcwd()
 
+    ## Clears previous actions from the underlying object.
     def _clear_actions(self):
         for act_ in self.actions():
             self.removeAction(act_)
 
+    ## Resets the browse action (after setting options).
     def reset_action(self):
         self._clear_actions()
         self.btnaction = QAction(QtGui.QIcon(f"resources/{self.btnicon}"), '')
         self.btnaction.setToolTip(self.opendialogtitle)
         self.btnaction.triggered.connect(self.on_btnaction)
         self.addAction(self.btnaction, self.btnposition)
-        #self.show()
 
+    ## Triggered slot for the browse action: opens dialog and sets the edit text.
     @Slot()
     def on_btnaction(self):
         if self.delegate: self.delegate.blockSignals(True)
@@ -240,40 +324,113 @@ class BrowseEdit(QtWidgets.QLineEdit):
 # *****          BasicDialog
 # ******************************************************************************** #
 
+## @brief Base class for simple dialog windows.
+# Creates the basic layout for controls (leaving the central area free to add controls),
+# and declares the validate() method to validate correctness of user input before accepting.
 class BasicDialog(QtWidgets.QDialog):
 
+    ## @param geometry `4-tuple` window geometry data: `(left, top, width, height)`.
+    # If set to `None` (default), the position will be centered on the parent widget or screen
+    # and the size will be automatically adjusted to fit the internal controls.
+    # @param title `str` window title (`None` for no title)
+    # @param icon `str` window icon file path (relative to project dir).
+    # `None` means no icon.
+    # @param parent `QtWidgets.QWidget` parent widget (default = `None`, i.e. no parent)
+    # @param flags `QtCore.Qt.WindowFlags` [Qt window flags](https://doc.qt.io/qt-5/qt.html#WindowType-enum)
+    # @param btn_ok `str`|`dict` 'OK' button caption or extended properties.
+    # If it is passed as a `str`, it is the caption (text) of an 'OK' button which
+    # triggers `accept()` when clicked. If passed as a `dict`, it may contain a number of
+    # button properties:
+    #   * `text` the button caption (text)
+    #   * `tooltip` the button tooltip (shown on mouse hover)
+    #   * `icon` the button's icon file (relative to project dir)
+    # If `None` is passed, no 'OK' button will be added.
+    # @param btn_cancel `str`|`dict` 'Cancel' button caption or extended properties.
+    # See `btn_ok` description above. This button will trigger `reject()` to cancel the dialog.
+    # @param sizepolicy `QtWidgets.QSizePolicy` [QWidget size policy](https://doc.qt.io/qt-5/qsizepolicy.html).
+    # Default is fixed size in both directions (non-resizable dialog).
     def __init__(self, geometry=None, title=None, icon=None, parent=None,
-                 flags=QtCore.Qt.WindowFlags(),
+                 flags=QtCore.Qt.WindowFlags(), btn_ok='OK', btn_cancel='Cancel',
                  sizepolicy=QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)):
         super().__init__(parent, flags)
-        self.initUI(geometry, title, icon)
+        self.initUI(geometry, title, icon, btn_ok, btn_cancel)
         self.setSizePolicy(sizepolicy)
 
+    ## @brief Creates the main (central) layout for controls.
+    # Must be overridden by child classes to change the layout type
+    # (default = `QtWidgets.QFormLayout`) and add controls.
     def addMainLayout(self):
+        ## `QtWidgets.QFormLayout` central layout for controls
         self.layout_controls = QtWidgets.QFormLayout()
 
-    def initUI(self, geometry=None, title=None, icon=None):
+    ## Creates the core controls: OK and Cancel buttons and layouts.
+    # @param geometry `4-tuple` window geometry data: `(left, top, width, height)`.
+    # If set to `None` (default), the position will be centered on the parent widget or screen
+    # and the size will be automatically adjusted to fit the internal controls.
+    # @param title `str` window title (`None` for no title)
+    # @param icon `str` window icon file name (relative to project dir). `None` means no icon.
+    # @param btn_ok `str`|`dict` 'OK' button caption or extended properties.
+    # If it is passed as a `str`, it is the caption (text) of an 'OK' button which
+    # triggers `accept()` when clicked. If passed as a `dict`, it may contain a number of
+    # button properties:
+    #   * `text` the button caption (text)
+    #   * `tooltip` the button tooltip (shown on mouse hover)
+    #   * `icon` the button's icon file (relative to project dir)
+    # If `None` is passed, no 'OK' button will be added.
+    # @param btn_cancel `str`|`dict` 'Cancel' button caption or extended properties.
+    # See `btn_ok` description above. This button will trigger `reject()` to cancel the dialog.
+    def initUI(self, geometry=None, title=None, icon=None, btn_ok='OK', btn_cancel='Cancel'):
         self.addMainLayout()
-        self.btn_OK = QtWidgets.QPushButton(QtGui.QIcon("resources/like.png"), 'OK', None)
-        self.btn_OK.setMaximumWidth(150)
-        self.btn_OK.setDefault(True)
-        self.btn_OK.clicked.connect(self.on_btn_OK_clicked)
-        self.btn_cancel = QtWidgets.QPushButton(QtGui.QIcon("resources/cancel.png"), 'Cancel', None)
-        self.btn_cancel.setMaximumWidth(150)
-        self.btn_cancel.clicked.connect(self.on_btn_cancel_clicked)
-        self.layout_bottom = QtWidgets.QHBoxLayout()
-        self.layout_bottom.setSpacing(10)
-        self.layout_bottom.addStretch()
-        self.layout_bottom.addWidget(self.btn_OK)
-        self.layout_bottom.addWidget(self.btn_cancel)
-        self.layout_bottom.addStretch()
 
-        self.layout_main = QtWidgets.QVBoxLayout()
-        self.layout_main.addLayout(self.layout_controls)
-        # self.layout_main.addStretch()
-        self.layout_main.addLayout(self.layout_bottom)
+        if btn_ok or btn_cancel:
+            ## `QtWidgets.QVBoxLayout` window layout
+            self.layout_main = QtWidgets.QVBoxLayout()
+            ## `QtWidgets.QHBoxLayout` bottom layout for OK and Cancel buttons
+            self.layout_bottom = QtWidgets.QHBoxLayout()
+            self.layout_bottom.setSpacing(10)
+            self.layout_bottom.addStretch()
+            if btn_ok:
+                if not isinstance(btn_ok, dict):
+                    iconfile = utils.make_abspath('resources/like.png')
+                    ttip = 'Apply and quit'
+                    caption = btn_ok
+                else:
+                    iconfile = utils.make_abspath(btn_ok.get('icon', 'resources/like.png'))
+                    ttip = btn_ok.get('tooltip', 'Apply and quit')
+                    caption = btn_ok.get('text', 'OK')
+                ## `QtWidgets.QPushButton` OK button
+                self.btn_OK = QtWidgets.QPushButton(QtGui.QIcon(iconfile), caption, None)
+                if ttip:
+                    self.btn_OK.setToolTip(ttip)
+                self.btn_OK.setMaximumWidth(150)
+                self.btn_OK.setDefault(True)
+                self.btn_OK.clicked.connect(self.on_btn_OK_clicked)
+                self.layout_bottom.addWidget(self.btn_OK)
+            if btn_cancel:
+                if not isinstance(btn_cancel, dict):
+                    iconfile = utils.make_abspath('resources/cancel.png')
+                    ttip = 'Apply and quit'
+                    caption = btn_cancel
+                else:
+                    iconfile = utils.make_abspath(btn_cancel.get('icon', 'resources/cancel.png'))
+                    ttip = btn_cancel.get('tooltip', 'Cancel and quit')
+                    caption = btn_cancel.get('text', 'Cancel')
+                ## `QtWidgets.QPushButton` Cancel button
+                self.btn_cancel = QtWidgets.QPushButton(QtGui.QIcon(iconfile), caption, None)
+                if ttip:
+                    self.btn_cancel.setToolTip(ttip)
+                self.btn_cancel.setMaximumWidth(150)
+                self.btn_cancel.clicked.connect(self.on_btn_cancel_clicked)
+                self.layout_bottom.addWidget(self.btn_cancel)          
+            self.layout_bottom.addStretch()
+            self.layout_main.addLayout(self.layout_controls)
+            # self.layout_main.addStretch()
+            self.layout_main.addLayout(self.layout_bottom)
+        else:
+            self.layout_main = self.layout_controls
 
         self.setLayout(self.layout_main)
+
         if geometry:
             self.setGeometry(*geometry)
         else:
@@ -283,13 +440,20 @@ class BasicDialog(QtWidgets.QDialog):
         if icon:
             self.setWindowIcon(QtGui.QIcon(f"resources/{icon}"))
 
+    ## Validates user input (reimplemented in child classes).
+    # @returns `bool` `True` if user input is valid, `False` otherwise
+    # @see on_btn_OK_clicked()
     def validate(self):
         return True
 
+    ## @brief Fires when the OK button is clicked.
+    # Calls validate() to check correctness of input and, if correct,
+    # accepts and closes window.
     @Slot()
     def on_btn_OK_clicked(self):
         if self.validate(): self.accept()
 
+    ## Fires when the Cancel button is clicked: rejects input and closes window.
     @Slot()
     def on_btn_cancel_clicked(self):
         self.reject()
@@ -298,6 +462,7 @@ class BasicDialog(QtWidgets.QDialog):
 # *****          TestEnv
 # ******************************************************************************** #
 
+## String to binary data optiona dialog used by gui::TestEnv.
 class TestEnvEditorAsk(BasicDialog):
     def __init__(self):
         super().__init__(title='Interpret value as...', icon='info.png')
@@ -317,6 +482,9 @@ class TestEnvEditorAsk(BasicDialog):
         self.layout_controls.addLayout(self.lo_btns)
 
         self.te_notes = QtWidgets.QPlainTextEdit()
+        palette = QtGui.QPalette()
+        palette.setBrush(QtGui.QPalette.Base, QtGui.QBrush(QtGui.QColor(255, 0, 0, 0)))
+        self.te_notes.setPalette(palette)
         self.te_notes.setReadOnly(True)
         self.layout_controls.addWidget(self.te_notes)
 
@@ -334,6 +502,7 @@ class TestEnvEditorAsk(BasicDialog):
             txt = 'ASCII string (will be converted to bytes)'
         self.te_notes.setPlainText(txt)
 
+## New variable editor dialog used by gui::TestEnv.
 class TestEnvEditor(BasicDialog):
     def __init__(self):
         super().__init__(title='New', icon='add.png')
@@ -350,7 +519,7 @@ class TestEnvEditor(BasicDialog):
         for d in cb_data:
             self.cb_type.addItem(d[0], d[1])
         self.cb_type.setCurrentIndex(0)
-        self.cb_type.currentIndexChanged.connect(self.on_cb_type)
+        self.cb_type.activated.connect(self.on_cb_type)
         self.chb_user = QtWidgets.QCheckBox('User (local)')
         self.chb_user.setChecked(True)
         self.chb_system = QtWidgets.QCheckBox('System')
@@ -365,6 +534,7 @@ class TestEnvEditor(BasicDialog):
         self.layout_controls.addRow('Type', self.cb_type)
         self.layout_controls.addRow('Namespaces', self.lo_chb)
 
+    ## Accepts input closing the dialog only if a valid variable name and value are present.
     def validate(self):
         if not self.le_name.text().strip():
             QtWidgets.QMessageBox.critical(self, 'Error', 'Please indicate variable name!')
@@ -374,6 +544,7 @@ class TestEnvEditor(BasicDialog):
             return False
         return True
 
+    ## Triggered when a combobox item is activated to selected the data type.
     @Slot(int)
     def on_cb_type(self, index):
         if index == 2:
@@ -381,18 +552,29 @@ class TestEnvEditor(BasicDialog):
             if dlg.exec():
                 self.strdata_mode = dlg.btns.checkedId()
             else:
-                self.strdata_mode = 0
+                try:
+                    self.cb_type.currentIndexChanged.disconnect()
+                    self.cb_type.setCurrentIndex(0)
+                finally:
+                    self.cb_type.currentIndexChanged.connect(self.on_cb_type)
 
+## System environment variable viewer and editor interface.
 class TestEnv(BasicDialog):
 
     def __init__(self):
-        self.sysproxy = sysproxy.Sysproxy(False)
-        self.thread_update = QThreadStump(on_run=self.sysproxy.update_vars, on_start=self.update_actions,
+        ## `sysproxy::Sysenv` env variable manipulator object
+        self.sysenv = sysproxy.Sysenv(False)
+        ## `gui::QThreadStump` variable update thread
+        self.thread_update = QThreadStump(on_run=self.sysenv.update_vars, on_start=self.update_actions,
                                           on_finish=self.update_envlist, on_error=self.update_envlist)
+        ## `gui::QThreadStump` variable edit thread
         self.thread_action = QThreadStump(on_run=None, on_start=self.update_actions,
                                           on_finish=self.refresh_vars_gui, on_error=self.refresh_vars_gui)
+        ## `bool` marker showing that there have been changes to the variables
         self.has_changed = False
-        super().__init__(title='SysEnv', icon='settings.png')
+        super().__init__(title='System Environment Variable Editor', icon='settings.png', 
+                         btn_ok={'text': 'Close', 'icon': 'resources/cancel.png', 
+                         'tooltip': 'Close dialog'}, btn_cancel=None)
 
     def addMainLayout(self):
         self.layout_controls = QtWidgets.QVBoxLayout()
@@ -400,6 +582,7 @@ class TestEnv(BasicDialog):
 
         self.lo_controls = QtWidgets.QHBoxLayout()
 
+        ## `QtWidgets.QTableWidget` table showing the env variables
         self.tw_envs = QtWidgets.QTableWidget(0, 3)
         self.tw_envs.setMinimumSize(200, 400)
         self.tw_envs.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
@@ -410,24 +593,24 @@ class TestEnv(BasicDialog):
         self.tw_envs.setHorizontalHeaderLabels(['Variable', 'Domain', 'Value'])
         self.tw_envs.horizontalHeader().setStretchLastSection(True)
         self.lo_controls.addWidget(self.tw_envs)
-
+        ## `QtWidgets.QToolBar` toolbar with action buttons
         self.tbar = QtWidgets.QToolBar()
         self.tbar.setOrientation(QtCore.Qt.Vertical)
         self.tbar.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self.tbar.setFixedWidth(100)
-
+        ## `QAction` refresh variables action
         self.act_refresh = QAction(QtGui.QIcon("resources/repeat.png"), 'Refresh')
         self.act_refresh.setShortcut(QtGui.QKeySequence.Refresh)
         self.act_refresh.setToolTip('Refresh system env variables')
         self.act_refresh.triggered.connect(self.on_act_refresh)
         self.tbar.addAction(self.act_refresh)
-
+        ## `QAction` create variable action
         self.act_add = QAction(QtGui.QIcon("resources/add.png"), 'Add')
         self.act_add.setShortcut(QtGui.QKeySequence.New)
         self.act_add.setToolTip('Add variable')
         self.act_add.triggered.connect(self.on_act_add)
         self.tbar.addAction(self.act_add)
-
+        ## `QAction` delete variable action
         self.act_delete = QAction(QtGui.QIcon("resources/error.png"), 'Unset')
         self.act_delete.setShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Delete))
         self.act_delete.setToolTip('Delete variables')
@@ -436,7 +619,7 @@ class TestEnv(BasicDialog):
 
         self.lo_controls.addWidget(self.tbar)
         self.layout_controls.addLayout(self.lo_controls)
-
+        ## `QtWidgets.QLabel` warning notification at bottom
         self.l_warning = QtWidgets.QLabel()
         # self.l_warning.setWordWrap(True)
         self.l_warning.setMinimumHeight(50)
@@ -461,6 +644,7 @@ class TestEnv(BasicDialog):
             self.thread_update.wait()
         event.accept()
 
+    ## Worker method TestEnv::thread_update to populate the main table from TestEnv::sysenv.
     def update_envlist(self):
         try:
             self.tw_envs.itemSelectionChanged.disconnect()
@@ -470,11 +654,11 @@ class TestEnv(BasicDialog):
 
         self.tw_envs.setSortingEnabled(False)
         self.tw_envs.clearContents()
-        self.tw_envs.setRowCount(len(self.sysproxy.locals) + len(self.sysproxy.globals))
+        self.tw_envs.setRowCount(len(self.sysenv.locals) + len(self.sysenv.globals))
         self.tw_envs.setMinimumSize(300, 300)
 
         i = 0
-        for k, lst_envs in enumerate((self.sysproxy.locals, self.sysproxy.globals)):
+        for k, lst_envs in enumerate((self.sysenv.locals, self.sysenv.globals)):
             for env_name in lst_envs:
                 item0 = QtWidgets.QTableWidgetItem(env_name)
                 item1 = QtWidgets.QTableWidgetItem('user' if k == 0 else 'system')
@@ -513,6 +697,7 @@ class TestEnv(BasicDialog):
 
         self.update_actions()
 
+    ## Repopulates the main table in a separate thread (TestEnv::thread_update).
     def refresh_vars_gui(self):
         if self.thread_update.isRunning():
             return
@@ -521,6 +706,13 @@ class TestEnv(BasicDialog):
         self.update_warning()
         self.thread_update.start()
 
+    ## Worker method TestEnv::thread_action to unset (delete) the selected variables.
+    # @param varnames `iterable` an iterable of 2-tuples indicating the variable name
+    # and domain:
+    # ```
+    # [ (env_name, 'user' or 'system'), ... ]
+    # ```
+    # @see sysproxy::Sysenv::unset_sys_env()
     def unset_vars(self, varnames):
         # varnames: list of 2-tuples: [('env', 'user'), ('env', 'system'), ...]
         def do_unser_vars():
@@ -528,24 +720,39 @@ class TestEnv(BasicDialog):
                 modes = ['user']
                 if var[1] == 'system':
                     modes.append('system')
-                self.sysproxy.unset_sys_env(var[0], modes, False)
+                self.sysenv.unset_sys_env(var[0], modes, False)
         self.has_changed = True
         return do_unser_vars
 
+    ## Worker method TestEnv::thread_action to change a variable.
+    # @param varname `str` the env variable name
+    # @param value `Any` the variable value
+    # @param modes `iterable` an iterable of either or both of 'user' and 'system',
+    # to indicate the domain(s) where the variable must be persisted
+    # @see sysproxy::Sysenv::set_sys_env()
     def set_var(self, varname, value, modes=('user',)):
         def do_set_var():
-            self.sysproxy.set_sys_env(varname, value, modes, False)
+            self.sysenv.set_sys_env(varname, value, modes, False)
         self.has_changed = True
         return do_set_var
 
+    ## Worker method TestEnv::thread_action to create a new variable.
+    # @param varname `str` the env variable name
+    # @param value `Any` the variable value
+    # @param valtype `str`|`int` the type of the value to create (see sysproxy::Sysenv::win_create_reg())
+    # @param modes `iterable` an iterable of either or both of 'user' and 'system',
+    # to indicate the domain(s) where the variable must be persisted
+    # @see sysproxy::Sysenv::set_sys_env()
     def create_var(self, varname, value, valtype, modes=('user',)):
         def do_create_var():
-            self.sysproxy.set_sys_env(varname, value, True, valtype, modes, False)
+            self.sysenv.set_sys_env(varname, value, True, valtype, modes, False)
         self.has_changed = True
         return do_create_var
 
     # ============================================= SLOTS ================================================================ #
 
+    ## Updates the Enabled property of the 3 actions based on running threads and 
+    # selected variables.
     @Slot()
     def update_actions(self):
         cnt_sel = len(self.tw_envs.selectedItems())
@@ -554,6 +761,8 @@ class TestEnv(BasicDialog):
         self.act_refresh.setEnabled(not running)
         self.act_add.setEnabled(not running)
 
+    ## Updates the visibility and text of TestEnv::l_warning
+    # if Super User privileges are detected or a variable change on Unix.
     @Slot()
     def update_warning(self):
         if (not self.has_changed and not sysproxy.CURRENT_USER[1]):
@@ -563,13 +772,16 @@ class TestEnv(BasicDialog):
             txt = 'SuperUser privileges active!<br>'
         if self.has_changed and sysproxy.OS != 'Windows':
             txt += 'Relogin to apply changes to OS!'
-        self.l_warning.setText(f'<span style="font-size:12pt; font-weight:600; color:red;">{txt}</span>')
+        self.l_warning.setText(f'<span style="font-size:11pt; font-weight:600; color:red;">{txt}</span>')
         self.l_warning.show()
 
+    ## TestEnv::act_refresh handler: calls TestEnv::refresh_vars_gui().
     @Slot(bool)
     def on_act_refresh(self, checked):
         self.refresh_vars_gui()
 
+    ## TestEnv::act_add handler: shows gui::TestEnvEditor dialog to
+    # create a new env variable.
     @Slot(bool)
     def on_act_add(self, checked):
         while self.thread_update.isRunning() or self.thread_action.isRunning():
@@ -611,6 +823,9 @@ class TestEnv(BasicDialog):
         self.thread_action.on_run = self.create_var(env, val, valtype, modes)
         self.thread_action.start()
 
+    ## TestEnv::act_delete handler: runs TestEnv::thread_action thread with the
+    # TestEnv::unset_vars() method to delete the variables currently selected in 
+    # TestEnv::tw_envs.
     @Slot(bool)
     def on_act_delete(self, checked):
         selitems = self.tw_envs.selectedItems()
@@ -636,6 +851,7 @@ class TestEnv(BasicDialog):
         self.thread_action.on_run = self.unset_vars(envs_to_unset)
         self.thread_action.start()
 
+    ## Triggers when a variable has been changed / added in TestEnv::tw_envs.
     @Slot(QtWidgets.QTableWidgetItem)
     def tw_itemChanged(self, item: QtWidgets.QTableWidgetItem):
         if item.column() != 2 or self.thread_update.isRunning():
@@ -655,9 +871,11 @@ class TestEnv(BasicDialog):
 # *****          MainWindow
 # ******************************************************************************** #
 
-## The application's main GUI window
+## The application's main GUI interface to control the system proxy settings.
 class MainWindow(BasicDialog):
 
+    ## Gets the application instance.
+    # @returns `QtWidgets.QApplication` the application instance
     @staticmethod
     def get_app(args):
         try:
@@ -669,9 +887,12 @@ class MainWindow(BasicDialog):
             return QtWidgets.QApplication(args)
 
     def __init__(self):
+        ## `sysproxy::Proxy` the proxy manipulation object
         self.sysproxy = sysproxy.Proxy()
+        ## `dict` local proxy settings bound to the GUI controls
         self.localproxy = self.sysproxy.asdict()
         rec = QtGui.QGuiApplication.primaryScreen().geometry()
+        ## `gui::QThreadStump` thread to apply proxy changes to system
         self.thread_apply = QThreadStump(on_run=None, on_start=self._on_apply_start,
                                          on_finish=self._on_apply_finish, on_error=self._on_apply_finish)
         super().__init__(title='Proxen!', icon='proxen.png', geometry=(rec.width() // 2 - 225, rec.height() // 2 - 100, 450, 600),
@@ -683,14 +904,15 @@ class MainWindow(BasicDialog):
     def addMainLayout(self):
         self.layout_controls = QtWidgets.QVBoxLayout()
 
+        ## `QSvgWidget` loading animation widget overlaying main window during operations
         self.loading_widget = QSvgWidget(utils.make_abspath('resources/loading.svg'))
         self.loading_widget.renderer().setAspectRatioMode(QtCore.Qt.AspectRatioMode.KeepAspectRatio)
         self.loading_widget.setWindowFlags(QtCore.Qt.SplashScreen | QtCore.Qt.FramelessWindowHint)
-
+        ## `QtWidgets.QToolBox` toolbox grouping the GUI controls
         self.tb = QtWidgets.QToolBox()
         self.tb.currentChanged.connect(self.tb_currentChanged)
 
-        # 1) main page: enable and persist toggles
+        ## `QtWidgets.QWidget` main page: enable and persist toggles
         self.wmain = QtWidgets.QWidget()
         self.lo_wmain = QtWidgets.QHBoxLayout()
 
@@ -722,7 +944,7 @@ class MainWindow(BasicDialog):
         self.wmain.setLayout(self.lo_wmain1)
         self.tb.addItem(self.wmain, 'Enable')
 
-        # 2) config page
+        ## `QtWidgets.QWidget` config page
         self.wconfig = QtWidgets.QWidget()
         self.lo_wconfig = QtWidgets.QVBoxLayout()
 
@@ -855,7 +1077,7 @@ class MainWindow(BasicDialog):
         self.wconfig.setLayout(self.lo_wconfig)
         self.tb.addItem(self.wconfig, 'Proxies')
 
-        # 2) app settings page
+        ## `QtWidgets.QWidget` app settings page
         self.wappconfig = QtWidgets.QWidget()
         self.lo_wappconfig = QtWidgets.QVBoxLayout()
 
@@ -867,33 +1089,49 @@ class MainWindow(BasicDialog):
         self.chb_log.setToolTip(self.chb_debug.toolTip())
         self.chb_log.setChecked(not utils.LOGFILE is None)
         self.lo_wappconfig.addWidget(self.chb_log)
+
+        self.act_envedit = QAction(QtGui.QIcon("resources/edit.png"), 'Env variables...')
+        self.act_envedit.setToolTip('View and edit all environment variables')
+        self.act_envedit.triggered.connect(self.on_act_envedit)
+        self.btn_envedit = QtWidgets.QToolButton()
+        self.btn_envedit.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        self.btn_envedit.setFixedWidth(150)
+        self.btn_envedit.setDefaultAction(self.act_envedit)
+        self.lo_wappconfig.addWidget(self.btn_envedit)
+
         self.lo_wappconfig.addStretch()
 
         self.wappconfig.setLayout(self.lo_wappconfig)
         self.tb.addItem(self.wappconfig, 'Settings')
 
-        # ----
         self.layout_controls.addWidget(self.tb)
         # self.layout_controls.addStretch()
 
+    ## Applies the local settings to the system.
+    # @see sysproxy::Proxy::fromdict()
     def _do_apply_config(self):
         self.sysproxy.fromdict(self.localproxy)
         # time.sleep(5)        
 
+    ## Restores the previous proxy settings.
+    # @see sysproxy::Proxy::restore()
     def _do_restore_config(self):
         self.sysproxy.restore()
 
+    ## Callback triggered after the apply thread (MainWindow::thread_apply) completes its job.
     def _on_apply_finish(self):
         self.localproxy = self.sysproxy.asdict()
         self.loading_widget.hide()
         self.setVisible(True)
         self.settings_to_gui()
 
+    ## Callback triggered before the apply thread (MainWindow::thread_apply) starts its job.
     def _on_apply_start(self):
         self.setVisible(False)
         self.loading_widget.setGeometry(self.x(), self.y(), self.width(), self.height())
         self.loading_widget.show()
 
+    ## Starts the apply thread (MainWindow::thread_apply) to apply changes.
     def apply_config(self):
         if self.thread_apply.isRunning():
             return
@@ -901,6 +1139,7 @@ class MainWindow(BasicDialog):
         # self.thread_apply.on_finish = self._on_apply_finish
         self.thread_apply.start()
 
+    ## Starts the apply thread (MainWindow::thread_apply) to restore the previous state.
     def restore_config(self):
         if self.thread_apply.isRunning():
             return
@@ -908,6 +1147,7 @@ class MainWindow(BasicDialog):
         # self.thread_apply.on_finish = self._on_apply_finish
         self.thread_apply.start()
 
+    ## Saves the app settings to `config.ini`.
     def save_app_settings(self):
         utils.CONFIG['app']['debug'] = str(self.chb_debug.isChecked()).lower()
         utils.CONFIG['app']['logfile'] = 'log.txt' if self.chb_log.isChecked() else None
@@ -941,6 +1181,7 @@ class MainWindow(BasicDialog):
             self.thread_apply.wait()
         event.accept()
 
+    ## Updates the GUI controls from the data in MainWindow::localproxy.
     @Slot()
     def settings_to_gui(self):
         # disconnect signals
@@ -967,6 +1208,7 @@ class MainWindow(BasicDialog):
         self.gb_noproxy.toggled.connect(self.on_gb_noproxy_checked)
         self.te_noproxy.textChanged.connect(self.on_te_noproxy_changed)
 
+    ## Asks the user to apply unsaved changes before quitting.
     @Slot()
     def on_btn_OK_clicked(self):
         if not self.validate(): return
@@ -988,6 +1230,7 @@ class MainWindow(BasicDialog):
             self.thread_apply.wait()
         self.accept()
 
+    ## Asks the user to cancel unsaved changes before quitting.
     @Slot()
     def on_btn_cancel_clicked(self):
         self.save_app_settings()
@@ -1006,6 +1249,7 @@ class MainWindow(BasicDialog):
             self.thread_apply.wait()
         self.reject()
 
+    ## Updates the app actions based on unsaved changes and active threads.
     @Slot()
     def update_actions_enabled(self):
         sysdict = self.sysproxy.asdict()
@@ -1025,16 +1269,20 @@ class MainWindow(BasicDialog):
         #     self.le_proxyhost.setStyleSheet('QLineEdit {{ background: {}; }} '.format(
         #         'white' if self.localproxy[proxy]['host'] == sysdict[proxy]['host'] else 'yellow'))
 
+    ## Triggers when the Enable toggle is switched.
     @Slot(bool)
     def on_act_enable_proxy(self, checked):
         self.localproxy['enabled'] = checked
         # apply immediately to system
         self.apply_config()
 
+    ## Triggers when the `MainWindow::tb` toolbox is changed by selecting a group.
     @Slot(int)
     def tb_currentChanged(self, index):
         self.setFixedHeight(250 if index != 1 else 600)
 
+    ## Triggers when a proxy radio button is checked to show the settings
+    # for the corresponding proxy.
     @Slot(int, bool)
     def on_btns_protocol_selected(self, index, checked):
         # disconnect signals
@@ -1063,6 +1311,7 @@ class MainWindow(BasicDialog):
         self.le_user.textEdited.connect(self.on_le_user_edit)
         self.le_pass.textEdited.connect(self.on_le_pass_edit)
 
+    ## `MainWindow::act_apply` handler: applies changes to system.
     @Slot(bool)
     def on_act_apply(self, checked):
         self.update_actions_enabled()
@@ -1070,6 +1319,7 @@ class MainWindow(BasicDialog):
             return
         self.apply_config()
 
+    ## `MainWindow::act_restore` handler: restores the current proxy settings.
     @Slot(bool)
     def on_act_restore(self, checked):
         self.update_actions_enabled()
@@ -1077,6 +1327,7 @@ class MainWindow(BasicDialog):
             return
         self.restore_config()
 
+    ## `MainWindow::act_loadconfig` handler: loads proxy settings from a JSON file.
     @Slot(bool)
     def on_act_loadconfig(self, checked):
         selected_path = QtWidgets.QFileDialog.getOpenFileName(self, 'Select config file', 'proxy_config.json', 'JSON files (*.json)')
@@ -1086,6 +1337,7 @@ class MainWindow(BasicDialog):
             self.localproxy = json.load(f_) # TODO: check keys in dict import
             self.settings_to_gui()
 
+    ## `MainWindow::act_saveconfig` handler: saves proxy settings to a JSON file.
     @Slot(bool)
     def on_act_saveconfig(self, checked):
         selected_path = QtWidgets.QFileDialog.getSaveFileName(self, 'Select config file', 'proxy_config.json', 'JSON files (*.json)')
@@ -1094,6 +1346,7 @@ class MainWindow(BasicDialog):
         with open(selected_path, 'w', encoding=utils.CODING) as f_:
             json.dump(self.localproxy, f_, indent=4)
 
+    ## Triggers when the proxy host is edited.
     @Slot(str)
     def on_le_proxyhost_edit(self, text):
         prot = PROXY_OBJS[self.btns_protocol.checkedId()]
@@ -1109,6 +1362,7 @@ class MainWindow(BasicDialog):
                                                        self.le_user.text(), self.le_pass.text()).asdict()
         self.update_actions_enabled()
 
+    ## Triggers when the proxy port is changed.
     @Slot(int)
     def on_le_proxyport_changed(self, value):
         prot = PROXY_OBJS[self.btns_protocol.checkedId()]
@@ -1124,6 +1378,7 @@ class MainWindow(BasicDialog):
                                                        self.le_user.text(), self.le_pass.text()).asdict()
         self.update_actions_enabled()
 
+    ## Triggers when the proxy group box is checked or unchecked.
     @Slot(bool)
     def on_gb_proxy_checked(self, checked):
         prot = PROXY_OBJS[self.btns_protocol.checkedId()]
@@ -1139,6 +1394,7 @@ class MainWindow(BasicDialog):
                                                        self.le_user.text(), self.le_pass.text()).asdict()
             self.update_actions_enabled()
 
+    ## Triggers when the proxy auth group box is checked or unchecked.
     @Slot(bool)
     def on_gb_auth_checked(self, checked):
         prot = PROXY_OBJS[self.btns_protocol.checkedId()]
@@ -1146,6 +1402,7 @@ class MainWindow(BasicDialog):
             self.localproxy[prot]['auth'] = checked
             self.update_actions_enabled()
 
+    ## Triggers when the proxy user name is edited.
     @Slot(str)
     def on_le_user_edit(self, text):
         prot = PROXY_OBJS[self.btns_protocol.checkedId()]
@@ -1153,6 +1410,7 @@ class MainWindow(BasicDialog):
             self.localproxy[prot]['uname'] = text
             self.update_actions_enabled()
 
+    ## Triggers when the proxy password is edited.
     @Slot(str)
     def on_le_pass_edit(self, text):
         prot = PROXY_OBJS[self.btns_protocol.checkedId()]
@@ -1160,6 +1418,7 @@ class MainWindow(BasicDialog):
             self.localproxy[prot]['password'] = text
             self.update_actions_enabled()
 
+    ## Triggers when the no-proxy group box is checked or unchecked.
     @Slot(bool)
     def on_gb_noproxy_checked(self, checked):
         if not checked:
@@ -1168,6 +1427,7 @@ class MainWindow(BasicDialog):
             self.localproxy['noproxy'] = str(self.sysproxy.noproxy) if not self.sysproxy.noproxy is None else None
         self.update_actions_enabled()
 
+    ## Triggers when the no-proxy text is changed.
     @Slot()
     def on_te_noproxy_changed(self):
         if self.localproxy.get('noproxy', None) is None:
@@ -1179,6 +1439,7 @@ class MainWindow(BasicDialog):
             self.localproxy['noproxy'] = None
         self.update_actions_enabled()
 
+    ## The 'Copy To' button handler: copies settings to the other proxies.
     @Slot()
     def on_btn_copyto(self):
         prot = PROXY_OBJS[self.btns_protocol.checkedId()]
@@ -1186,3 +1447,9 @@ class MainWindow(BasicDialog):
             if prot_other == prot: continue
             self.localproxy[prot_other] = self.localproxy[prot].copy()
         self.settings_to_gui()
+
+    ## `MainWindow::act_envedit` handler: shows the gui::TestEnv dialog to 
+    # edit variables manually.
+    @Slot(bool)
+    def on_act_envedit(self, checked):
+        TestEnv().exec()

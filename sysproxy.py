@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
+## @package proxen.sysproxy
+# @brief Implements classes to work with the system proxy configuration. See Sysenv and Proxy.
 import os, platform, traceback, re, json, subprocess
 import dataclasses
 from collections.abc import Callable
 
+## @brief `str` the current OS platform name, e.g. 'Windows', 'Linux' or 'Darwin' (MacOS)
 OS = platform.system()
 
 if not OS in ('Windows', 'Linux', 'Darwin'):
@@ -10,6 +13,7 @@ if not OS in ('Windows', 'Linux', 'Darwin'):
 
 if OS == 'Windows':
     import winreg
+    ## `dict` Windows registry branch names
     WIN_REG_BRANCHES = {'HKEY_CLASSES_ROOT': winreg.HKEY_CLASSES_ROOT,
                         'HKCR': winreg.HKEY_CLASSES_ROOT,
                         'HKEY_CURRENT_USER': winreg.HKEY_CURRENT_USER,
@@ -26,12 +30,17 @@ import utils
 
 # --------------------------------------------------------------- #
 
+## `tuple` current user name and admin privileges mark (see utils::has_admin())
 CURRENT_USER = utils.has_admin()
+## `str` Windows registry key containing current proxy settings
 WIN_PROXY_KEY = r'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
-WIN_ENV_LOCAL_KEY = 'Environment' # HKCU branch
-WIN_ENV_SYSTEM_KEY = r'SYSTEM\CurrentControlSet\Control\Session Manager\Environment' # HKLM branch
+## `str` Windows registry key containing user environment variables (in HKCU branch)
+WIN_ENV_LOCAL_KEY = 'Environment'
+## `str` Windows registry key containing system-wide environment variables (in HKLM branch)
+WIN_ENV_SYSTEM_KEY = r'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+## `str` Windows dummy registry entry to update environment variables
 WIN_DUMMY_KEYNAME = 'ttt'
-
+## `str` default Unix local settings file (loaded on user logon)
 UNIX_LOCAL_FILE = '~/.profile'
 if OS != 'Windows':
     shenv = os.environ.get('SHELL', None)
@@ -43,27 +52,36 @@ if OS != 'Windows':
             UNIX_LOCAL_FILE = '~/.zshrc'
         elif shell == 'csh':
             UNIX_LOCAL_FILE = '~/.cshrc'
+## `list` Unix user settings files
 UNIX_PROFILE_FILES_USR = ['~/.profile', '~/.bashrc', '~/.bash_profile', '~/.zshrc', '~/.cshrc', '~/.tcshrc', ' ~/.login']
+## `list` Unix root/system settings files
 UNIX_PROFILE_FILES_SYS = ['/etc/profile', '/etc/environment', '/etc/bash.bashrc', '/etc/bashrc', '/etc/zsh/zshrc', '/etc/csh.cshrc', '/etc/csh.login']
+## `str` regex template to search for env vars in Unix files
 REGEX_PROXY_EXPORT = r'(export\s{}=)(.*)'
 
 # --------------------------------------------------------------- #
 
+## @brief Base data class for proxy / noproxy config classes.
 @dataclasses.dataclass
 class Dclass:
+    ## `callable` called when a member attribute is written to (set)
     on_setattr: Callable = None
 
+    ## @returns `str` string representation of the object (must be implemented in child classes)
     @property
     def proxystr(self):
         return ''
 
+    ## @returns `dict` dict representation of the object (default = all members)
     def asdict(self):
         # return dataclasses.asdict(self)
         return dict((field.name, getattr(self, field.name)) for field in dataclasses.fields(self) if field.name != 'on_setattr')
 
+    ## @returns `str` string representation of the object (calls Dclass::proxystr())
     def __str__(self):
         return self.proxystr
 
+    ## Hook executed when a member attribute is written to (set)
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
         if getattr(self, 'on_setattr', None) and name != 'on_setattr':
@@ -71,15 +89,24 @@ class Dclass:
 
 # --------------------------------------------------------------- #
 
+## @brief System proxy configuration object, e.g. for HTTP_PROXY or HTTPS_PROXY.
 @dataclasses.dataclass
 class Proxyconf(Dclass):
+    ## `str` the proxy protocol (type): any of 'http', 'https', 'ftp' or 'rsync'
     protocol: str = 'http'
+    ## `str` the proxy host / IP, e.g. '192.168.1.0'
     host: str = ''
+    ## `int` the proxy port (default = 3128)
     port: int = 3128
+    ## `bool` whether the proxy server must use authentication (default = `False`)
     auth: bool = False
+    ## `str` proxy user name (if auth is `True`)
     uname: str = ''
+    ## `str` proxy user password (if auth is `True`)
     password: str = ''
 
+    ## @returns `str` string representation in the format: 
+    # `protocol://[username:password@]host:port`
     @property
     def proxystr(self):
         if self.auth and self.uname:
@@ -90,10 +117,17 @@ class Proxyconf(Dclass):
 
 # --------------------------------------------------------------- #
 
+## @brief Proxy bypass (no-proxy) configuration object.
 @dataclasses.dataclass
 class Noproxy(Dclass):
+    ## `str` comma-separated list of proxy bypass addresses, e.g.
+    # `localhost, 127.0.0.1, *.example.com`
     noproxies: str = ''
 
+    ## Returns the concatenated string representation of the bypassed addresses.
+    # @param winreg `bool` if `True`, the string will be formatted using the Windows
+    # registry convention (`HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\ProxyOverrid`e)
+    # @returns `str` delimited list of proxy bypass addresses
     def asstr(self, winreg=False):
         l_noproxies = self.aslist()
         if not l_noproxies:
@@ -106,6 +140,8 @@ class Noproxy(Dclass):
         else:
             return ','.join(l_noproxies)
 
+    ## @returns `list` bypassed addresses as a list, e.g.
+    # ```['localhost', '127.0.0.1', '*.example.com']```
     def aslist(self):
         if not self.noproxies:
             return []
@@ -121,22 +157,69 @@ class Noproxy(Dclass):
     def proxystr(self):
         return self.asstr(False)
 
+    ## @returns `bool` convenience to check object validity:
+    # returns `False` if Noproxy::noproxies is empty and `True` otherwise
     def __bool__(self):
         return bool(self.noproxies)
 
 # --------------------------------------------------------------- #
 
-class Sysproxy:
+## @brief A class to operate system environment variables (cross-platform).
+#
+# This class provides a set of relatively low-level tools to manipulate
+# the system environment variables, such as:
+# - list environment variables in the user and system domains
+# - get and set variable values
+# - create and delete variables
+# - perform some proxy-specific tasks parsing related variable values
+#
+# Most operations allow of two separate variable domains: *user* and *system*.
+# Environment variables in the *user* domain affect only the current user and not the
+# entire system; each user can create / set their own variables, even with the same names.
+# *User* variables are stored in the corresponding locations
+# depending on the platform:
+# - **Windows**: `HKEY_CURRENT_USER` registry branch (`Environment` key)
+# - **Linux and Mac**: user files such as `~/.profile` (see sysproxy::UNIX_PROFILE_FILES_USR)
+#
+# Correspondingly, *system* variables affect the entire system and are used in default of
+# the user variables. For example, if the variable 'HTTP_PROXY' is not set in the *user*
+# domain, the OS will use the value of 'HTTP_PROXY' in the *system* domain (if present).
+# If a variable exists in both domains, the *user* one prevails.\n
+# *System* variables are stored in:
+# - **Windows**: `HKEY_LOCAL_MACHINE` registry branch (`SYSTEM\CurrentControlSet\Control\Session Manager\Environment` key)
+# - **Linux and Mac**: user files such as `/etc/profile` (see sysproxy::UNIX_PROFILE_FILES_SYS)
+# 
+# This class provides a unified interface for writing (creating / setting) environment variables
+# in both domains and persisting them in the system by writing to the corresponding files
+# and registry values.
+#
+# @warning This class persists all proxy configurations in the system!
+# For Windows, it will set / create registry values in `HKCU\Environment`.
+# For Unix systems (Linux and Max), it will write the proxy environment variables to
+# the indicated profile / environment file (like `~/.bashrc` or `~/.profile`).
+class Sysenv:
 
+    ## @param update_now `bool` if `True`, retrieves the env variables on object creation
+    # @param unix_file `str` for Unix, the file with user settings where the proxy
+    # environment variables will be written (default = sysproxy::UNIX_LOCAL_FILE)
     def __init__(self, update_now=True, unix_file=UNIX_LOCAL_FILE):
+        ## `str` for Unix, the file with user settings where the proxy 
+        # environment variables will be written (default = sysproxy::UNIX_LOCAL_FILE)
         self.unix_file = os.path.expanduser(unix_file)
+        ## `dict` local (user) environment variables 
+        # (key = variable name, value = variable value)
         self.locals = {}
+        ## `dict` global (system) environment variables 
+        # (key = variable name, value = variable value)
         self.globals = {}
         if update_now: self.update_vars()
 
+    ## @returns `bool` `True` if Sysenv::unix_file is a local (user's) file path,
+    # `False` if it's a system path (starts with `/etc`)
     def _unix_write_local(self) -> bool:
         return not self.unix_file.startswith('/etc')
 
+    ## Reads environment variables into Sysenv::locals and Sysenv::globals.
     def update_vars(self):
         self.locals = {}
         self.globals = {}
@@ -149,7 +232,20 @@ class Sysproxy:
 
         utils.log('Env variables updated', 'debug')
 
-    def get_env(self, envname, case_sensitive=False, modes=('user', 'system'), default=None): 
+    ## Gets the value(s) of the specified environment variable.
+    # @param envname `str` the environment variable name, e.g. 'http_proxy'
+    # @param case_sensitive `bool` if `True`, match the var name exactly; otherwise,
+    # search both lower- and upper-case name
+    # @param modes `iterable` an iterable of either or both of these elements:
+    # - `user`: search the variable in Sysenv::locals
+    # - `system`: search the variable in Sysenv::globals
+    # @param default `Any` value used in default of the variable value, if not found
+    # (default = `None`)
+    # @returns `dict` a dictionary of 2 elements:
+    # ```python
+    # {'user': value or None, 'system': value or None}
+    # ```
+    def get_env(self, envname, case_sensitive=False, modes=('user', 'system'), default=None) -> dict: 
         res = None      
         if 'user' in modes:
             res = self.locals.get(envname, default if case_sensitive else self.locals.get(envname.upper(), self.locals.get(envname.lower(), default)))
@@ -157,6 +253,12 @@ class Sysproxy:
             res = self.globals.get(envname, default if case_sensitive else self.globals.get(envname.upper(), self.globals.get(envname.lower(), default)))
         return res
 
+    ## Deletes (unsets) an env variable on Unix systems.
+    # @param envname `str` the environment variable name, e.g. 'http_proxy'
+    # @param modes `iterable` an iterable of either or both of these elements:
+    # - `user`: unset user variable (from `~/...` files)
+    # - `system`: unset system variable (from `/etc/...` files)
+    # @returns `bool` success = `True`, failure = `False`
     def unix_del_env(self, envname, modes=('user',)) -> bool:
         if OS == 'Windows':
             raise Exception('This method is only for UNIX platforms!')
@@ -187,9 +289,14 @@ class Sysproxy:
             traceback.print_exc()
             return False
 
+    ## (Re)sets the value of an env variable on Unix systems.
+    # @param filepath `str` the Unix file to set / create the variable
+    # @param envname `str` the environment variable name, e.g. 'http_proxy'
+    # @param value `Any` the variable value, e.g. '192.168.1.0' (string) or 25 (number)
+    # @returns `bool` success = `True`, failure = `False`
     def unix_write_env(self, filepath, envname, value) -> bool:
         if OS == 'Windows':
-            raise Exception('This method is only for UNIX platforms!')        
+            raise Exception('This method is only for UNIX platforms!') 
         filepath = os.path.abspath(os.path.expanduser(filepath))
         if not os.path.isfile(filepath):
             return False
@@ -211,6 +318,14 @@ class Sysproxy:
             traceback.print_exc()
             return False
 
+    ## Gets the value of a specified key/val from the Windows registry.
+    # @param keyname `str` the registry key path
+    # @param valname `str` the registry value name
+    # @param branch `str` the registry branch name
+    # @returns `tuple` a 2-tuple containing the following elements:
+    # -# `str` the retrieved value (as a string)
+    # -# `int` the value type (see [winreg docs](https://docs.python.org/3/library/winreg.html#value-types))
+    # `None` is returned on error
     def win_get_reg(self, keyname, valname, branch='HKEY_CURRENT_USER') -> tuple[str, int]:
         if OS != 'Windows':
             raise Exception('This method is available only on Windows platforms!')
@@ -222,11 +337,21 @@ class Sysproxy:
             k = winreg.OpenKeyEx(branch, keyname)
             res = winreg.QueryValueEx(k, valname)
         except:
-            traceback.print_exc()
+            utils.log(f'!!! Failed to get Win reg value {keyname}\\{valname}', 'debug')
         finally:
             if k: winreg.CloseKey(k)
         return res
 
+    ## Sets the value of a variable in the Windows registry.
+    # @param keyname `str` the registry key path
+    # @param valname `str` the registry value name
+    # @param value `str` the value to set 
+    # (will be converted as needed to `int` or `bytes` depending on the value type in the registry)
+    # @param branch `str` the registry branch name
+    # @returns `tuple` a 2-tuple containing the following elements:
+    # -# `str` the value of the entry written to (as a string)
+    # -# `int` the value type (see [winreg docs](https://docs.python.org/3/library/winreg.html#value-types))
+    # `None` is returned on error (e.g. if the value doesn't exist in the registry)
     def win_set_reg(self, keyname, valname, value, branch='HKEY_CURRENT_USER') -> tuple[str, int]:
         if OS != 'Windows':
             raise Exception('This method is available only on Windows platforms!')
@@ -266,6 +391,23 @@ class Sysproxy:
             if k: winreg.CloseKey(k)
         return res
 
+    ## Creates a new entry in the Windows registry.
+    # @param keyname `str` the registry key path
+    # @param valname `str` the registry value name
+    # @param value `str` the value to set
+    # @param valtype `str`|`int` the type of the value to create.
+    # If it is passed as `None`, the method will attempt to guess the type automatically
+    # from the Python type of `value`. If it is passed as a string, it should be any of:
+    # - `string` or empty: corresponds the `REG_SZ` type in the Windows registry
+    # - `number`: corresponds the `REG_DWORD` type in the Windows registry
+    # - `binary`: corresponds the `REG_BINARY` type in the Windows registry
+    # - `macro`: corresponds the `REG_EXPAND_SZ` type in the Windows registry
+    # If passed as an `int`, it should be any of the [winreg type constants](https://docs.python.org/3/library/winreg.html#value-types).
+    # @param branch `str` the registry branch name
+    # @returns `tuple` a 2-tuple containing the following elements:
+    # -# `str` the value of the created entry (as a string)
+    # -# `int` the value type (see [winreg docs](https://docs.python.org/3/library/winreg.html#value-types))
+    # `None` is returned on error (e.g. if the value already exists in the registry)
     def win_create_reg(self, keyname, valname, value, valtype=None, branch='HKEY_CURRENT_USER') -> tuple[str, int]:
         if OS != 'Windows':
             raise Exception('This method is available only on Windows platforms!')
@@ -321,6 +463,11 @@ class Sysproxy:
             if k: winreg.CloseKey(k)
         return res
 
+    ## Deletes an entry in the Windows registry.
+    # @param keyname `str` the registry key path
+    # @param valname `str` the registry value name
+    # @param branch `str` the registry branch name
+    # @returns `bool` success = `True`, failure = `False`
     def win_del_reg(self, keyname, valname, branch='HKEY_CURRENT_USER') -> bool:
         if OS != 'Windows':
             raise Exception('This method is available only on Windows platforms!')
@@ -345,6 +492,16 @@ class Sysproxy:
             if k: winreg.CloseKey(k)
         return res
 
+    ## Retrieves variables from a Windows registry key.
+    # @param keyname `str` the registry key path
+    # @param branch `str` the registry branch name
+    # @param expand_vars `bool` whether to resolve internal macros (like '%PATH%)
+    # @param with_types `bool` whether to return values as 2-tuples: `(value, type)`
+    # @returns `dict` a dictionary of variables:
+    # ```python
+    # {'variable name': value}               # if with_types == False
+    # {'variable name': (value, value_type)} # if with_types == True
+    # ```
     def win_list_reg(self, keyname, branch='HKEY_CURRENT_USER', expand_vars=True, with_types=False) -> dict:
         if OS != 'Windows':
             raise Exception('This method is available only on Windows platforms!')
@@ -374,24 +531,59 @@ class Sysproxy:
             if k: winreg.CloseKey(k)
         return res
 
+    ## @brief Retrieves the value of a proxy setting from the Windows registry.
+    # Proxy settings are located in `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings`
+    # @param valname `str` the value (setting) name, e.g. 'ProxyServer'
+    # @returns `str` the retreived value or `None` on failure
     def win_get_reg_proxy(self, valname) -> str:
         res = self.win_get_reg(WIN_PROXY_KEY, valname)
         return res[0] if res else None
 
+    ## @brief Sets the value of a proxy setting in the Windows registry.
+    # Proxy settings are located in `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings`
+    # @param valname `str` the value (setting) name, e.g. 'ProxyServer'
+    # @param value `str` the value to set
+    # @returns `str` the newly set value or `None` on failure
     def win_set_reg_proxy(self, valname, value) -> str:
         res = self.win_set_reg(WIN_PROXY_KEY, valname, value)
+        if res is None:
+            res = self.win_create_reg(WIN_PROXY_KEY, valname, value)
         return res[0] if res else None
 
+    ## @brief Gets the values of all proxy-related environment variables in the user and system domains.
+    # @returns `dict` a dictionary in the following format:
+    # ```python
+    # {
+    #    'user': {'http_proxy': value, 'https_proxy': value, ...},
+    #    'system': {'http_proxy': value, 'https_proxy': value, ...}
+    # }
+    # ```
     def list_sys_envs_proxy(self) -> dict:
         proxies = [item for sublist in [[p.lower(), p.upper()] for p in ('http_proxy', 'https_proxy', 'ftp_proxy', 'rsync_proxy', 'no_proxy')] for item in sublist]
         return {'user': {k: v for k, v in self.locals if k in proxies},
                 'system': {k: v for k, v in self.globals if k in proxies}}
 
-    def get_sys_env(self, envname: str, default=None) -> dict:
+    ## Gets the value of an environment variable.
+    # @param envname `str` the variable to get
+    # @param default `Any` the default value to return on failure
+    # @returns `dict` a dictionary of 2 elements:
+    # ```python
+    # {'user': value or None, 'system': value or None}
+    # ```
+    def get_sys_env(self, envname, default=None) -> dict:
         return {'user': self.get_env(envname, False, ('user',), default),
                 'system': self.get_env(envname, False, ('system',), default)}
 
-    def set_sys_env(self, envname: str, value, create=True, valtype=None, modes=('user',), update_vars=True) -> bool:
+    ## Sets or creates an environment variable.
+    # @param envname `str` the variable to get
+    # @param value `str` the value to set (will be converted as needed)
+    # @param create `bool` whether the variable must be created if absent
+    # @param valtype `str`|`int` the type of the value to create (see Sysenv::win_create_reg())
+    # @param modes `iterable` an iterable of either or both of 'user' and 'system',
+    # to indicate the domain(s) where the variable must be persisted
+    # @param update_vars `bool` whether to repopulate the variables after this operation
+    # @returns `bool` success = `True`, failure = `False`
+    def set_sys_env(self, envname, value, create=True, valtype=None, modes=('user',), update_vars=True) -> bool:
         if ('system' in modes) and (not CURRENT_USER[1]):
             raise Exception('Cannot execute command: SU privilege asked!')
         
@@ -439,6 +631,12 @@ class Sysproxy:
             utils.log(f'Set system env "{envname}" = "{value}"', 'debug')
         return res
 
+    ## Deletes (unsets) an environment variable.
+    # @param envname `str` the environment variable name, e.g. 'http_proxy'
+    # @param modes `iterable` an iterable of either or both of 'user' and 'system',
+    # to indicate the domain(s) where the variable must be deleted from
+    # @param update_vars `bool` whether to repopulate the variables after this operation
+    # @returns `bool` success = `True`, failure = `False`
     def unset_sys_env(self, envname: str, modes=('user',), update_vars=True) -> bool:
         if ('system' in modes) and (not CURRENT_USER[1]):
             raise Exception('Cannot execute command: SU privilege asked!')
@@ -471,14 +669,23 @@ class Sysproxy:
         utils.log(f'Delete system env "{envname}"', 'debug')
         return res
 
+    ## @brief Gets the current HTTP proxy setting from the system.
+    # The config is retrieved from the registry on Windows systems
+    # and from the environment on Unix systems.
+    # @returns `dict` a dictionary of 2 elements:
+    # ```python
+    # {'user': value or None, 'system': value or None}
+    # ``` 
     def get_sys_http_proxy(self) -> dict:
         env1 = self.get_sys_env('all_proxy')
         env2 = self.get_sys_env('http_proxy')
         env = {'user': env1['user'] or env2['user'], 'system': env1['system'] or env2['system']}
 
         if OS == 'Windows':
+            if not self.get_sys_proxy_enabled():
+                return {'user': None, 'system': None}
             res = self.win_get_reg_proxy('ProxyServer')            
-            if not res is None:
+            if res:
                 if not '@' in res:
                     # try to get auth from env variable
                     env_str = env['user'] or env['system']
@@ -496,16 +703,18 @@ class Sysproxy:
 
         return env
 
+    ## @returns `True` if system proxy is enabled and `False` otherwise
     def get_sys_proxy_enabled(self) -> bool:
         if OS == 'Windows':
             res = self.win_get_reg_proxy('ProxyEnable')
-            if res is None: return False
             return bool(res)
 
         # Linux doesn't have separate 'proxy enable' switch, so try to get 'http_proxy' ENV...
         env = self.get_sys_http_proxy()
         return not (env['user'] is None and env['system'] is None)
 
+    ## @returns `sysproxy::Noproxy` the current proxy bypass configuration or `None`
+    # if not present.
     def get_sys_noproxy(self) -> Noproxy:
         if OS == 'Windows':
             res = self.win_get_reg_proxy('ProxyOverride')
@@ -513,6 +722,13 @@ class Sysproxy:
         res = self.get_sys_env('no_proxy')
         return None if res is None else Noproxy(None, res['user'] or res['system'] or '')
 
+    ## Gets the value of a proxy setting as a `sysproxy::Proxyconf` object.
+    # @param proxy `str` the proxy type (protocol) to get:
+    # - `http_proxy`: the HTTP proxy
+    # - `https_proxy`: the HTTPS proxy
+    # - `ftp_proxy`: the FTP proxy
+    # - `rsync_proxy`: the RSYNC proxy
+    ## @returns `sysproxy::Proxyconf` the parsed proxy configuration or `None` if not present.
     def get_sys_proxy_parsed(self, proxy='http_proxy') -> Proxyconf:
         _proxy = self.get_sys_http_proxy() if proxy == 'http_proxy' else self.get_sys_env(proxy)
         if (_proxy is None) or not (_proxy['user'] or _proxy['system']): 
@@ -537,15 +753,44 @@ class Sysproxy:
 
 # --------------------------------------------------------------- #
 
+##  @brief A class to operate system proxy settings (cross-platform).
+# 
+# The class provides read/write properties for the common proxy types: 
+# - `Proxy::http_proxy`
+# - `Proxy::https_proxy`
+# - `Proxy::ftp_proxy`
+# - `Proxy::rsync_proxy`
+#
+# Each of these has the type sysproxy::Proxyconf, so their internal attributes like
+# host, port etc. can be accesssed directly, e.g. to set a new port for the HTTP
+# proxy: `proxyobj.http_proxy.port = 3000`
+#
+# It also exposes the property `Proxy::noproxy` to manipulate the proxy bypasses
+# (most commonly, the localhost). Its `Proxy::enabled` property lets one enable or
+# disable all the proxies in a single operation, simply by: `proxyobj.enabled = True # False`
+#
+# There are also a number of convenience methods to store and read the proxy settings
+# in / from a JSON file, apply settings from a `dict` or serialize them as a `dict` or `str`.
+#
+# In its internal operations, the class replies on a sysproxy::Sysenv object to manipulate
+# the corresponding environment variables and system files.
 class Proxy:
 
+    ## @param storage_file `str` default settings file that can be used to read and store
+    # the proxy settings
+    # @param unix_file `str` the default user file on Unix systems to store (persist)
+    # the proxy environment variables (see sysproxy::Sysenv::unix_file)
     def __init__(self, storage_file='proxy_config.json', unix_file=UNIX_LOCAL_FILE):
+        ## `str` default settings file that can be used to read and store the proxy settings 
         self.storage_file = utils.make_abspath(storage_file) if not os.path.isabs(storage_file) else storage_file
-        self.sysproxy = Sysproxy(True, unix_file)
+        ## `sysproxy::Sysenv` object to operate proxy-related environment variables
+        self.sysenv = Sysenv(True, unix_file)
+        ## `bool` update mode counter
         self._isupdating = 0
         self.read_system()
         self.save()
 
+    ## @returns `dict` proxy settings serialized as a Python dictionary
     def asdict(self) -> dict:
         d = {'enabled': self.enabled, 'noproxy': str(self.noproxy)}
         for attr in ('http_proxy', 'https_proxy', 'ftp_proxy', 'rsync_proxy'):
@@ -553,9 +798,12 @@ class Proxy:
             d[attr] = prop.asdict() if prop else None
         return d
 
+    ## @returns `str` proxy settings serialized as a string (in JSON format)
     def asstr(self) -> str:
         return json.dumps(self.asdict())
 
+    ## @brief Sets member properties reading from a Python dictionary.
+    # The dictionary may have been produced by a previous call to Proxy::asdict().
     def fromdict(self, dconfig: dict):
         if self.asdict() == dconfig:
             return
@@ -567,44 +815,66 @@ class Proxy:
                                 obj.get('port', 3128), obj.get('auth', False), 
                                 obj.get('uname', ''), obj.get('password', ''))
             setattr(self, attr, obj)
+        ## `sysproxy::Noproxy` proxy bypass configuration object
         self.noproxy = Noproxy(self._on_setattr, dconfig['noproxy']) if dconfig.get('noproxy', None) else None
+        ## `bool` property to get and set the enabled status of the system proxy
         self.enabled = dconfig.get('enabled', self.enabled)
         self.end_updates()
 
+    ## @brief Sets member properties reading from a JSON-formatted string.
+    # The string may have been produced by a previous call to Proxy::asstr().
     def fromstr(self, strconfig: str):
         self.fromdict(json.loads(strconfig))
 
+    ## Increments the update mode counter (Proxy::_isupdating) to show that a new
+    # update operation is under way.
     def begin_updates(self):
         self._isupdating += 1
 
+    ## Decrements the update mode counter (Proxy::_isupdating) and updates the 
+    # underlying environment variables if the counter is zero.
     def end_updates(self):
         if self._isupdating == 0:
             return
         self._isupdating -= 1
         if self._isupdating == 0:
-            self.sysproxy.update_vars()
+            self.sysenv.update_vars()
 
+    ## @returns `sysproxy::Noproxy` the system no-proxy (proxy bypass) configuration
     def _get_sys_noproxy(self):
-        noproxy = self.sysproxy.get_sys_noproxy()
+        noproxy = self.sysenv.get_sys_noproxy()
         if noproxy:
             noproxy.on_setattr = self._on_setattr
         return noproxy
 
+    ## Gets the system settings for a specific proxy.
+    # @param proxystr `str` the proxy type to get the config for (e.g. 'http_proxy')
+    # @returns `sysproxy::Proxyconf` the system proxy configuration for the given proxy.
+    # If no proxy setting exists, `None` is returned.
+    # @see sysproxy::Sysenv::get_sys_proxy_parsed().
     def _get_sys_proxy(self, proxystr):
-        proxy = self.sysproxy.get_sys_proxy_parsed(proxystr)
+        proxy = self.sysenv.get_sys_proxy_parsed(proxystr)
         if proxy:
             proxy.on_setattr = self._on_setattr
         return proxy
 
+    ## Initializes the member properties from the current system proxy settings.
     def read_system(self):
-        self._enabled = self.sysproxy.get_sys_proxy_enabled()
+        ## `bool` current proxy enabled status
+        self._enabled = self.sysenv.get_sys_proxy_enabled()
+        ## `sysproxy::Noproxy` proxy bypass configuration object (or `None` if not set)
         self._noproxy = self._get_sys_noproxy()
+        ## `sysproxy::Proxyconf` HTTP proxy object (or `None` if not set)
         self._http_proxy = self._get_sys_proxy('http_proxy')
+        ## `sysproxy::Proxyconf` HTTPS proxy object (or `None` if not set)
         self._https_proxy = self._get_sys_proxy('https_proxy')
+        ## `sysproxy::Proxyconf` FTP proxy object (or `None` if not set)
         self._ftp_proxy = self._get_sys_proxy('ftp_proxy')
+        ## `sysproxy::Proxyconf` RSYNC proxy object (or `None` if not set)
         self._rsync_proxy = self._get_sys_proxy('rsync_proxy')
         utils.log(f'SYSTEM SETTINGS: {str(self)}', 'debug')
 
+    ## Stores the current proxy settings in a JSON file.
     def store_config(self, config_file=None):
         if not config_file:
             config_file = self.storage_file
@@ -613,6 +883,7 @@ class Proxy:
         with open(config_file, 'w', encoding=utils.CODING) as f_:
             json.dump(self.asdict(), f_, indent=4)
 
+    ## Reads proxy settings from a JSON file and applies them.
     def read_config(self, config_file=None):
         if not config_file:
             config_file = self.storage_file
@@ -625,14 +896,16 @@ class Proxy:
             d = json.load(f_)
             self.fromdict(d)
 
+    ## Hook callback method to monitor setting proxy attributes and make corresponding
+    # changes in the system (writing the env variables).
     def _on_setattr(self, obj, name, value):
         if isinstance(obj, Noproxy):
             if OS == 'Windows':
-                self.sysproxy.win_set_reg_proxy('ProxyOverride', obj.asstr(True))
+                self.sysenv.win_set_reg_proxy('ProxyOverride', obj.asstr(True))
             if obj:
-                self.sysproxy.set_sys_env('no_proxy', obj.asstr(False), update_vars=not self._isupdating)
+                self.sysenv.set_sys_env('no_proxy', obj.asstr(False), update_vars=not self._isupdating)
             else:
-                self.sysproxy.unset_sys_env('no_proxy', update_vars=not self._isupdating)
+                self.sysenv.unset_sys_env('no_proxy', update_vars=not self._isupdating)
         elif isinstance(obj, Proxyconf):
             if obj is self._http_proxy:
                 proxy = 'http_proxy'
@@ -645,126 +918,142 @@ class Proxy:
             else:
                 return
             if proxy == 'http_proxy' and OS == 'Windows':
-                self.sysproxy.win_set_reg_proxy('ProxyServer', f'{obj.host}:{obj.port}')
-            self.sysproxy.set_sys_env(proxy, str(obj), update_vars=not self._isupdating)
+                self.sysenv.win_set_reg_proxy('ProxyServer', f'{obj.host}:{obj.port}')
+            self.sysenv.set_sys_env(proxy, str(obj), update_vars=not self._isupdating)
 
+    ## Getter for Proxy::_enabled.
     @property
     def enabled(self):
         if getattr(self, '_enabled', None) is None:
-            self._enabled = self.sysproxy.get_sys_proxy_enabled()
+            self._enabled = self.sysenv.get_sys_proxy_enabled()
         return self._enabled
 
+    ## Setter for Proxy::_enabled: enables or disables the system proxy.
     @enabled.setter
     def enabled(self, is_enabled) -> bool:
         if is_enabled == self._enabled:
             return
         if not is_enabled:
-            self.sysproxy.unset_sys_env('http_proxy', update_vars=False)
-            self.sysproxy.unset_sys_env('all_proxy', update_vars=False)
+            self.sysenv.unset_sys_env('http_proxy', update_vars=False)
+            self.sysenv.unset_sys_env('all_proxy', update_vars=False)
         else:
             proxy = self.http_proxy or self.https_proxy or self.ftp_proxy
             if not proxy:
                 return
-            self.sysproxy.set_sys_env('http_proxy', str(proxy), update_vars=False)
+            self.sysenv.set_sys_env('http_proxy', str(proxy), update_vars=False)
         if OS == 'Windows':
-            self.sysproxy.win_set_reg_proxy('ProxyEnable', int(is_enabled))
+            self.sysenv.win_set_reg_proxy('ProxyEnable', int(is_enabled))
 
         if not self._isupdating:
-            self.sysproxy.update_vars()
+            self.sysenv.update_vars()
         self._enabled = is_enabled
 
+    ## Getter for Proxy::_noproxy.
     @property
     def noproxy(self) -> Noproxy:
         if getattr(self, '_noproxy', None) is None:
             self._noproxy = self._get_sys_noproxy()
         return self._noproxy
 
+    ## Setter for Proxy::_noproxy: sets or unsets the proxy bypass addresses.
     @noproxy.setter
     def noproxy(self, value: Noproxy):
         if (self._noproxy == value) or (self._noproxy.noproxies == value.noproxies and self._noproxy.persist == value.persist):
             return
         if OS == 'Windows':
-            self.sysproxy.win_set_reg_proxy('ProxyOverride', value.asstr(True) if value else '')
+            self.sysenv.win_set_reg_proxy('ProxyOverride', value.asstr(True) if value else '')
         if not value:
-            self.sysproxy.unset_sys_env('no_proxy', update_vars=not self._isupdating)
+            self.sysenv.unset_sys_env('no_proxy', update_vars=not self._isupdating)
         elif value.noproxies:
-            self.sysproxy.set_sys_env('no_proxy', value.asstr(False), update_vars=not self._isupdating)
+            self.sysenv.set_sys_env('no_proxy', value.asstr(False), update_vars=not self._isupdating)
         self._noproxy = value
 
+    ## Getter for Proxy::_http_proxy.
     @property
     def http_proxy(self) -> Proxyconf:
         if getattr(self, '_http_proxy', None) is None:
             self._http_proxy = self._get_sys_proxy('http_proxy')
         return self._http_proxy
 
+    ## Setter for Proxy::_http_proxy.
     @http_proxy.setter
     def http_proxy(self, value: Proxyconf):
         if self._http_proxy == value:
             return
         if not value:
-            self.sysproxy.unset_sys_env('http_proxy', update_vars=False)
-            self.sysproxy.unset_sys_env('all_proxy', update_vars=False)
+            self.sysenv.unset_sys_env('http_proxy', update_vars=False)
+            self.sysenv.unset_sys_env('all_proxy', update_vars=False)
             if OS == 'Windows':
-                self.sysproxy.win_set_reg_proxy('ProxyEnable', 0)
+                self.sysenv.win_set_reg_proxy('ProxyServer', '')
+                self.sysenv.win_set_reg_proxy('ProxyEnable', 0)
                 self._enabled = False
         else:
-            self.sysproxy.set_sys_env('http_proxy', str(value), update_vars=False)
+            self.sysenv.set_sys_env('http_proxy', str(value), update_vars=False)
             if OS == 'Windows':
-                self.sysproxy.win_set_reg_proxy('ProxyServer', f'{value.host}:{value.port}')
+                self.sysenv.win_set_reg_proxy('ProxyServer', f'{value.host}:{value.port}')
         
         if not self._isupdating:
-            self.sysproxy.update_vars()
+            self.sysenv.update_vars()
         self._http_proxy = value
 
+    ## Getter for Proxy::_https_proxy.
     @property
     def https_proxy(self) -> Proxyconf:
         if getattr(self, '_https_proxy', None) is None:
             self._https_proxy = self._get_sys_proxy('https_proxy')
         return self._https_proxy
 
+    ## Setter for Proxy::_https_proxy.
     @https_proxy.setter
     def https_proxy(self, value: Proxyconf):
         if self._https_proxy == value:
             return
         if not value:
-            self.sysproxy.unset_sys_env('https_proxy', update_vars=not self._isupdating)
+            self.sysenv.unset_sys_env('https_proxy', update_vars=not self._isupdating)
         else:
-            self.sysproxy.set_sys_env('https_proxy', str(value), update_vars=not self._isupdating)
+            self.sysenv.set_sys_env('https_proxy', str(value), update_vars=not self._isupdating)
         self._https_proxy = value
 
+    ## Getter for Proxy::_ftp_proxy.
     @property
     def ftp_proxy(self) -> Proxyconf:
         if getattr(self, '_ftp_proxy', None) is None:
             self._ftp_proxy = self._get_sys_proxy('ftp_proxy')
         return self._ftp_proxy
 
+    ## Setter for Proxy::_ftp_proxy.
     @ftp_proxy.setter
     def ftp_proxy(self, value: Proxyconf):
         if self._ftp_proxy == value:
             return
         if not value:
-            self.sysproxy.unset_sys_env('ftp_proxy', update_vars=not self._isupdating)
+            self.sysenv.unset_sys_env('ftp_proxy', update_vars=not self._isupdating)
         else:
-            self.sysproxy.set_sys_env('ftp_proxy', str(value), update_vars=not self._isupdating)
+            self.sysenv.set_sys_env('ftp_proxy', str(value), update_vars=not self._isupdating)
         self._ftp_proxy = value
 
+    ## Getter for Proxy::_rsync_proxy.
     @property
     def rsync_proxy(self) -> Proxyconf:
         if getattr(self, '_rsync_proxy', None) is None:
             self._rsync_proxy = self._get_sys_proxy('rsync_proxy')
         return self._rsync_proxy
 
+    ## Setter for Proxy::_rsync_proxy.
     @rsync_proxy.setter
     def rsync_proxy(self, value: Proxyconf):
         if self._rsync_proxy == value:
             return
         if not value:
-            self.sysproxy.unset_sys_env('rsync_proxy', update_vars=not self._isupdating)
+            self.sysenv.unset_sys_env('rsync_proxy', update_vars=not self._isupdating)
         else:
-            self.sysproxy.set_sys_env('rsync_proxy', str(value), update_vars=not self._isupdating)
+            self.sysenv.set_sys_env('rsync_proxy', str(value), update_vars=not self._isupdating)
         self._rsync_proxy = value
 
-    def proxy_by_name(self, proxy='http'):
+    ## Returns a proxy object by its short name, e.g. 'http' -> `self.http_proxy`.
+    # @param proxy `str` alias for the proxy, e.g. 'http', 'https', 'ftp' or 'rsync'
+    # @returns `sysproxy::Proxyconf` the corresponding proxy object
+    def proxy_by_name(self, proxy='http') -> Proxyconf:
         if proxy == 'http':
             return self.http_proxy
         if proxy == 'https':
@@ -774,6 +1063,10 @@ class Proxy:
         if proxy == 'rsync':
             return self.rsync_proxy
 
+    ## Applies the settings from one proxy object to all the others.
+    # @param source `str` alias of the source proxy object, e.g. 'http'
+    # @param targets `list of str` aliases of the target proxy objects;
+    # if `None` or empty, all the *other* proxies are used.
     def copy_from(self, source='http', targets=['https', 'ftp', 'rsync']):
         src = self.proxy_by_name(source)
         if not src: return
@@ -797,12 +1090,18 @@ class Proxy:
                     self.rsync_proxy = src
         self.end_updates()
 
+    ## Saves the current proxy config to a dictonary as backup.
+    # @see Proxy::restore()
     def save(self):
+        ## `dict` backup proxy settings as a dictionary
         self.stored = self.asdict()
 
+    ## Restores the proxy settings from the backup.
+    # @see Proxy::save()
     def restore(self):
         if getattr(self, 'stored', None):
             self.fromdict(self.stored)
     
+    ## Serializes the proxy settings as a string -- see Proxy::asstr().
     def __str__(self):
         return self.asstr()

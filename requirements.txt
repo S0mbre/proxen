@@ -1,2 +1,2 @@
-requests
+platform
 PySide6 			# or PySide2 or PyQt5

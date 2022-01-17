@@ -16,7 +16,7 @@ except ImportError:
         from PyQt5 import QtCore, QtGui, QtWidgets
         from PyQt5.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
         from PyQt5.QtWidgets import QAction
-        from PyQt6.QtSvg import QSvgWidget
+        from PyQt5.QtSvg import QSvgWidget
     except ImportError:
         from PySide2 import QtCore, QtGui, QtWidgets
         from PySide2.QtCore import Signal, Slot
