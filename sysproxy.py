@@ -4,6 +4,7 @@
 import os, platform, traceback, re, json, subprocess
 import dataclasses
 from collections.abc import Callable
+from typing import Union
 
 ## @brief `str` the current OS platform name, e.g. 'Windows', 'Linux' or 'Darwin' (MacOS)
 OS = platform.system()
@@ -40,8 +41,14 @@ WIN_ENV_LOCAL_KEY = 'Environment'
 WIN_ENV_SYSTEM_KEY = r'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
 ## `str` Windows dummy registry entry to update environment variables
 WIN_DUMMY_KEYNAME = 'ttt'
+## `list` Unix user settings files
+UNIX_PROFILE_FILES_USR = ['~/.profile', '~/.bashrc', '~/.bash_profile', '~/.zshrc', '~/.cshrc', '~/.tcshrc', ' ~/.login']
+## `list` Unix root/system settings files
+UNIX_PROFILE_FILES_SYS = ['/etc/environment', '/etc/profile', '/etc/bashrc', '/etc/bash.bashrc', '/etc/zsh/zshrc', '/etc/csh.cshrc', '/etc/csh.login']
 ## `str` default Unix local settings file (loaded on user logon)
 UNIX_LOCAL_FILE = '~/.profile'
+## `str` default Unix system settings file
+UNIX_SYSTEM_FILE = '/etc/environment'
 if OS != 'Windows':
     shenv = os.environ.get('SHELL', None)
     if shenv:
@@ -52,12 +59,14 @@ if OS != 'Windows':
             UNIX_LOCAL_FILE = '~/.zshrc'
         elif shell == 'csh':
             UNIX_LOCAL_FILE = '~/.cshrc'
-## `list` Unix user settings files
-UNIX_PROFILE_FILES_USR = ['~/.profile', '~/.bashrc', '~/.bash_profile', '~/.zshrc', '~/.cshrc', '~/.tcshrc', ' ~/.login']
-## `list` Unix root/system settings files
-UNIX_PROFILE_FILES_SYS = ['/etc/profile', '/etc/environment', '/etc/bash.bashrc', '/etc/bashrc', '/etc/zsh/zshrc', '/etc/csh.cshrc', '/etc/csh.login']
+    for fn in UNIX_PROFILE_FILES_SYS:
+        if os.path.isfile(fn):
+            UNIX_SYSTEM_FILE = fn
+            break
 ## `str` regex template to search for env vars in Unix files
-REGEX_PROXY_EXPORT = r'(export\s{}=)(.*)'
+REGEX_ENV_EXPORT = r'(export\s{}=)(.*)'
+## `str` regex template to search for proxy env vars
+REGEX_PROXY_EXPORT = r'export\s[\w_]+proxy'
 
 # --------------------------------------------------------------- #
 
@@ -200,12 +209,13 @@ class Noproxy(Dclass):
 class Sysenv:
 
     ## @param update_now `bool` if `True`, retrieves the env variables on object creation
-    # @param unix_file `str` for Unix, the file with user settings where the proxy
-    # environment variables will be written (default = sysproxy::UNIX_LOCAL_FILE)
-    def __init__(self, update_now=True, unix_file=UNIX_LOCAL_FILE):
+    def __init__(self, update_now=True):
         ## `str` for Unix, the file with user settings where the proxy 
-        # environment variables will be written (default = sysproxy::UNIX_LOCAL_FILE)
-        self.unix_file = os.path.expanduser(unix_file)
+        # environment variables will be written (= sysproxy::UNIX_LOCAL_FILE)
+        self.unix_file_local = os.path.expanduser(UNIX_LOCAL_FILE)
+        ## `str` for Unix, the file with system settings where the proxy 
+        # environment variables will be written (= sysproxy::UNIX_SYSTEM_FILE)
+        self.unix_file_system = os.path.expanduser(UNIX_SYSTEM_FILE)
         ## `dict` local (user) environment variables 
         # (key = variable name, value = variable value)
         self.locals = {}
@@ -214,20 +224,16 @@ class Sysenv:
         self.globals = {}
         if update_now: self.update_vars()
 
-    ## @returns `bool` `True` if Sysenv::unix_file is a local (user's) file path,
-    # `False` if it's a system path (starts with `/etc`)
-    def _unix_write_local(self) -> bool:
-        return not self.unix_file.startswith('/etc')
-
     ## Reads environment variables into Sysenv::locals and Sysenv::globals.
     def update_vars(self):
         self.locals = {}
         self.globals = {}
-        if OS == 'Windows':            
+        if OS == 'Windows':
+            # on Win it's possible to get local and system (machine) vars separately from the registry
             self.locals = self.win_list_reg(WIN_ENV_LOCAL_KEY) or {}
             self.globals = self.win_list_reg(WIN_ENV_SYSTEM_KEY, 'HKLM') or {}
         else:
-            # subprocess.run(f'source {self.unix_file}', shell=True, executable='/bin/bash')
+            # hard to separate 'user' from 'system' vars on Unix, so use only user domain
             self.locals.update(**os.environ)
 
         utils.log('Env variables updated', 'debug')
@@ -253,29 +259,82 @@ class Sysenv:
             res = self.globals.get(envname, default if case_sensitive else self.globals.get(envname.upper(), self.globals.get(envname.lower(), default)))
         return res
 
+    def _unix_get_from_file(self, envname_pattern, filename, case_sensitive=False, reverse=False, raw=False) -> Union[dict, str]:
+        if OS == 'Windows':
+            raise Exception('This method is only for UNIX platforms!')
+        flags = ''
+        if not case_sensitive:
+            flags = '-i'
+        if reverse:
+            flags = '-v' if not flags else f'{flags}v'
+        if flags:
+            flags = f' {flags}'
+        try:
+            res = subprocess.run(f'grep{flags} "export\s{envname_pattern}" "{filename}"', shell=True, check=True, capture_output=True, encoding=utils.CODING)
+            res.check_returncode()
+            if raw:
+                return res.stdout
+            else:
+                ret = {}
+                sp1 = res.stdout.split('\n')
+                for line in sp1:
+                    line = line[line.index('export')+7:]
+                    sp2 = line.split('=')
+                    if len(sp2) == 2:
+                        val = sp2[1].strip()
+                        if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                            val = val[1:-1]
+                        ret[sp2[0]] = val
+                return ret
+        except subprocess.CalledProcessError as err:
+            utils.log('Shell command %s returned %d: %s', 'exception', err.cmd, err.returncode, err.output)
+            return None
+        except:
+            return None
+
+    def _unix_delete_from_file(self, envname_pattern, filename, case_sensitive=False) -> bool:
+        if OS == 'Windows':
+            raise Exception('This method is only for UNIX platforms!')
+        txt = ''
+        with open(filename, 'r', encoding=utils.CODING) as f_:
+            txt = f_.read()
+        res = self._unix_get_from_file(envname_pattern, filename, case_sensitive, True, True)
+        if res is None:
+            return False
+        if res == txt:
+            utils.log(f'No envs with pattern "{envname_pattern}" are found in file "{filename}"', 'debug')
+            return True
+        with open(filename, 'w', encoding=utils.CODING) as f_:
+            f_.write(res)
+        utils.log(f'Deleted envs with pattern "{envname_pattern}" from file "{filename}"', 'debug')
+        return True
+
     ## Deletes (unsets) an env variable on Unix systems.
     # @param envname `str` the environment variable name, e.g. 'http_proxy'
     # @param modes `iterable` an iterable of either or both of these elements:
     # - `user`: unset user variable (from `~/...` files)
     # - `system`: unset system variable (from `/etc/...` files)
     # @returns `bool` success = `True`, failure = `False`
-    def unix_del_env(self, envname, modes=('user',)) -> bool:
+    def unix_del_env(self, envname, modes=('user', 'system')) -> bool:
         if OS == 'Windows':
             raise Exception('This method is only for UNIX platforms!')
-        if ('system' in modes) and (not CURRENT_USER[1]):
-            raise Exception('Cannot modify system files: SU privilege asked!')
         try:
-            reg = re.compile(r'^\s*export\s{}.*$'.format(envname), re.I | re.MULTILINE)
+            # reg = re.compile(r'^\s*export\s{}.*$'.format(envname), re.I | re.MULTILINE)
             for mode in modes:
                 if mode == 'user':
                     file_list = UNIX_PROFILE_FILES_USR
                 elif mode == 'system':
-                    file_list = UNIX_PROFILE_FILES_SYS
+                    if not CURRENT_USER[1]:
+                        continue
+                    else:
+                        file_list = UNIX_PROFILE_FILES_SYS
                 else:
                     continue
                 for fname in file_list: 
                     fname = os.path.expanduser(fname)
                     if not os.path.isfile(fname): continue
+                    self._unix_delete_from_file(envname, fname)
+                    """
                     with open(fname, 'r', encoding=utils.CODING) as f_:
                         ftext = f_.read().strip()
                     if reg.search(ftext) is None:
@@ -284,36 +343,37 @@ class Sysenv:
                     with open(fname, 'w', encoding=utils.CODING) as f_:
                         f_.write(ftext)
                     utils.log(f'Deleted env "{envname}" from file "{fname}"', 'debug')
+                    """                    
             return True
+
         except:
             traceback.print_exc()
             return False
 
     ## (Re)sets the value of an env variable on Unix systems.
-    # @param filepath `str` the Unix file to set / create the variable
     # @param envname `str` the environment variable name, e.g. 'http_proxy'
     # @param value `Any` the variable value, e.g. '192.168.1.0' (string) or 25 (number)
     # @returns `bool` success = `True`, failure = `False`
-    def unix_write_env(self, filepath, envname, value) -> bool:
+    def unix_write_env(self, envname, value, write_system=True) -> bool:
         if OS == 'Windows':
-            raise Exception('This method is only for UNIX platforms!') 
-        filepath = os.path.abspath(os.path.expanduser(filepath))
-        if not os.path.isfile(filepath):
-            return False
-        wr_local = not filepath.startswith('/etc')
-        if not wr_local and not CURRENT_USER[1]:
-            raise Exception(f'Cannot write to {filepath}: SU privilege asked!')
+            raise Exception('This method is only for UNIX platforms!')
         try:
-            # 1 - delete exports in local OR systems files with this env
-            self.unix_del_env(envname, ['user' if wr_local else 'system'])
+            # 1 - delete exports in local AND/OR systems files with this env
+            self.unix_del_env(envname)
 
-            # 2 - write env to indicated file
-            with open(filepath, 'a', encoding=utils.CODING) as f_:               
-                for e_ in (envname.lower(), envname.upper()):
-                    f_.write(f'{utils.NL}export {e_}="{value}"')
+            # 2 - write env to files
+            files = [self.unix_file_local]
+            if write_system and CURRENT_USER[1]:
+                files.append(self.unix_file_system)
 
-            utils.log(f'Written env "{envname}" = "{value}" to file "{filepath}"', 'debug')
+            for fname in files:
+                with open(fname, 'a', encoding=utils.CODING) as f_:               
+                    for e_ in (envname.lower(), envname.upper()):
+                        f_.write(f'{utils.NL}export {e_}="{value}"')
+                utils.log(f'Written env "{envname}" = "{value}" to file "{fname}"', 'debug')
+                
             return True
+
         except:
             traceback.print_exc()
             return False
@@ -378,7 +438,7 @@ class Sysenv:
                 if val[0] != value:
                     winreg.SetValueEx(k, valname, 0, val[1], value)
                     # propagate env vars by calling setx
-                    subprocess.run(f'setx ttt t > nul', shell=True)                    
+                    subprocess.run('setx ttt t > nul', shell=True)
                     res = winreg.QueryValueEx(k, valname) 
                     utils.log(f'Set win reg key "{keyname}\\{valname}" = "{res[0]}"', 'debug')
                 else:                    
@@ -454,7 +514,7 @@ class Sysenv:
                 winreg.SetValueEx(k, valname, 0, valtype, value)
                 res = winreg.QueryValueEx(k, valname)
                 # propagate env vars by calling setx
-                subprocess.run(f'setx ttt t > nul', shell=True)
+                subprocess.run('setx ttt t > nul', shell=True)
                 utils.log(f'Created win reg key "{keyname}\\{valname}" = "{res[0]}"', 'debug')
         except:
             traceback.print_exc()
@@ -480,7 +540,7 @@ class Sysenv:
             try:
                 winreg.DeleteValue(k, valname)
                 # propagate env vars by calling setx
-                subprocess.run(f'setx ttt t > nul', shell=True)
+                subprocess.run('setx ttt t > nul', shell=True)
                 utils.log(f'Deleted win reg key "{keyname}\\{valname}"', 'debug')
             except FileNotFoundError:
                 utils.log(f'Win reg key "{keyname}\\{valname}" is not found, skipping delete', 'debug')            
@@ -617,7 +677,7 @@ class Sysenv:
             res = all(res)            
         else:
             if create or ('user' in modes and env['user']) or ('system' in modes and env['system']):
-                res = self.unix_write_env(self.unix_file, envname, value)
+                res = self.unix_write_env(envname, value)
             else:
                 res = None
         
@@ -658,7 +718,7 @@ class Sysenv:
                         res.append(False)
             res = all(res)         
         else:
-            res = self.unix_del_env(envname, modes)
+            res = self.unix_del_env(envname)
 
         if res:
             for e_ in {envname, envname.lower(), envname.upper()}:
@@ -778,13 +838,11 @@ class Proxy:
 
     ## @param storage_file `str` default settings file that can be used to read and store
     # the proxy settings
-    # @param unix_file `str` the default user file on Unix systems to store (persist)
-    # the proxy environment variables (see sysproxy::Sysenv::unix_file)
-    def __init__(self, storage_file='proxy_config.json', unix_file=UNIX_LOCAL_FILE):
+    def __init__(self, storage_file='proxy_config.json'):
         ## `str` default settings file that can be used to read and store the proxy settings 
         self.storage_file = utils.make_abspath(storage_file) if not os.path.isabs(storage_file) else storage_file
         ## `sysproxy::Sysenv` object to operate proxy-related environment variables
-        self.sysenv = Sysenv(True, unix_file)
+        self.sysenv = Sysenv(True)
         ## `bool` update mode counter
         self._isupdating = 0
         self.read_system()
@@ -958,7 +1016,7 @@ class Proxy:
     ## Setter for Proxy::_noproxy: sets or unsets the proxy bypass addresses.
     @noproxy.setter
     def noproxy(self, value: Noproxy):
-        if (self._noproxy == value) or (self._noproxy.noproxies == value.noproxies and self._noproxy.persist == value.persist):
+        if self._noproxy == value:
             return
         if OS == 'Windows':
             self.sysenv.win_set_reg_proxy('ProxyOverride', value.asstr(True) if value else '')

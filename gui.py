@@ -1239,7 +1239,7 @@ class MainWindow(BasicDialog):
 
             if self.thread_apply.isRunning():
                 self.thread_apply.wait()
-
+            self.thread_apply.on_start = None
             self.thread_apply.on_run = self._do_apply_config
             self.thread_apply.on_finish = None
             self.thread_apply.on_error = None
@@ -1259,6 +1259,7 @@ class MainWindow(BasicDialog):
                 return
             if self.thread_apply.isRunning():
                 self.thread_apply.wait()
+            self.thread_apply.on_start = None
             self.thread_apply.on_run = self._do_restore_config
             self.thread_apply.on_finish = None
             self.thread_apply.on_error = None
