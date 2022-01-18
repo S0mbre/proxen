@@ -1,7 +1,7 @@
 var searchData=
 [
-  ['unix_5fdel_5fenv_0',['unix_del_env',['../classproxen_1_1sysproxy_1_1_sysenv.html#a42ce7b263abb67879aa1c0be584ae1cb',1,'proxen::sysproxy::Sysenv']]],
-  ['unix_5fwrite_5fenv_1',['unix_write_env',['../classproxen_1_1sysproxy_1_1_sysenv.html#ab8a5e2fdd948cfaa541ab98e2c08c158',1,'proxen::sysproxy::Sysenv']]],
+  ['unix_5fdel_5fenv_0',['unix_del_env',['../classproxen_1_1sysproxy_1_1_sysenv.html#a674957501971a0f966dbe70f2d709ca3',1,'proxen::sysproxy::Sysenv']]],
+  ['unix_5fwrite_5fenv_1',['unix_write_env',['../classproxen_1_1sysproxy_1_1_sysenv.html#ad1d6b389c909f2f6ee30ebd1a360403c',1,'proxen::sysproxy::Sysenv']]],
   ['unlock_2',['unlock',['../classproxen_1_1gui_1_1_q_thread_stump.html#a9063c2f54d2ff2973f5b51578df4ea3e',1,'proxen::gui::QThreadStump']]],
   ['unset_5fsys_5fenv_3',['unset_sys_env',['../classproxen_1_1sysproxy_1_1_sysenv.html#ae2fe101f2d425ea8b0f0d885347a7263',1,'proxen::sysproxy::Sysenv']]],
   ['unset_5fvars_4',['unset_vars',['../classproxen_1_1gui_1_1_test_env.html#af9e0f1e2d1643bced41ac3468ef3557a',1,'proxen::gui::TestEnv']]],

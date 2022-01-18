@@ -85,8 +85,8 @@ $(function() {
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a9f6fa900ac4212178a590ec23db585b0"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a9f6fa900ac4212178a590ec23db585b0">__init__</a> (self, <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a1de1d17ca5e73c4a1613d388a6dc106d">storage_file</a>='proxy_config.json', unix_file=<a class="el" href="namespaceproxen_1_1sysproxy.html#a90e82009b3722cd96dd4abcf9fcd73bd">UNIX_LOCAL_FILE</a>)</td></tr>
-<tr class="separator:a9f6fa900ac4212178a590ec23db585b0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8781f08fccc6b4f6aee15862bc51d427"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a8781f08fccc6b4f6aee15862bc51d427">__init__</a> (self, <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a1de1d17ca5e73c4a1613d388a6dc106d">storage_file</a>='proxy_config.json')</td></tr>
+<tr class="separator:a8781f08fccc6b4f6aee15862bc51d427"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af946e55faf36ac3b32905d3e6ac7a723"><td class="memItemLeft" align="right" valign="top">dict&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#af946e55faf36ac3b32905d3e6ac7a723">asdict</a> (self)</td></tr>
 <tr class="separator:af946e55faf36ac3b32905d3e6ac7a723"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab02f779a6ac70c3077e20191220f90d4"><td class="memItemLeft" align="right" valign="top">str&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#ab02f779a6ac70c3077e20191220f90d4">asstr</a> (self)</td></tr>
@@ -238,10 +238,10 @@ Private Attributes</h2></td></tr>
 <p >There are also a number of convenience methods to store and read the proxy settings in / from a JSON file, apply settings from a <code>dict</code> or serialize them as a <code>dict</code> or <code>str</code>.</p>
 <p >In its internal operations, the class replies on a <a class="el" href="classproxen_1_1sysproxy_1_1_sysenv.html" title="A class to operate system environment variables (cross-platform).">sysproxy::Sysenv</a> object to manipulate the corresponding environment variables and system files. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00777">777</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00850">850</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 </div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
-<a id="a9f6fa900ac4212178a590ec23db585b0" name="a9f6fa900ac4212178a590ec23db585b0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9f6fa900ac4212178a590ec23db585b0">&#9670;&nbsp;</a></span>__init__()</h2>
+<a id="a8781f08fccc6b4f6aee15862bc51d427" name="a8781f08fccc6b4f6aee15862bc51d427"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8781f08fccc6b4f6aee15862bc51d427">&#9670;&nbsp;</a></span>__init__()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -256,13 +256,7 @@ Private Attributes</h2></td></tr>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>storage_file</em> = <code>'proxy_config.json'</code>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>unix_file</em> = <code><a class="el" href="namespaceproxen_1_1sysproxy.html#a90e82009b3722cd96dd4abcf9fcd73bd">UNIX_LOCAL_FILE</a></code>&#160;</td>
+          <td class="paramname"><em>storage_file</em> = <code>'proxy_config.json'</code>&#160;</td>
         </tr>
         <tr>
           <td></td>
@@ -274,12 +268,11 @@ Private Attributes</h2></td></tr>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">storage_file</td><td><code>str</code> default settings file that can be used to read and store the proxy settings </td></tr>
-    <tr><td class="paramname">unix_file</td><td><code>str</code> the default user file on Unix systems to store (persist) the proxy environment variables (see <a class="el" href="classproxen_1_1sysproxy_1_1_sysenv.html#a5bec3b855641cc8deb71f7fe14bb2789" title="str for Unix, the file with user settings where the proxy environment variables will be written (defa...">sysproxy::Sysenv::unix_file</a>) </td></tr>
   </table>
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00783">783</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00854">854</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -302,7 +295,7 @@ Private Attributes</h2></td></tr>
 
 <p>Serializes the proxy settings as a string &ndash; see <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#ab02f779a6ac70c3077e20191220f90d4">Proxy::asstr()</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01106">1106</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01177">1177</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -331,7 +324,7 @@ Private Attributes</h2></td></tr>
 </div><div class="memdoc">
 <dl class="section return"><dt>Returns</dt><dd><code><a class="el" href="classproxen_1_1sysproxy_1_1_noproxy.html" title="Proxy bypass (no-proxy) configuration object.">sysproxy::Noproxy</a></code> the system no-proxy (proxy bypass) configuration </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00844">844</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00915">915</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -379,7 +372,7 @@ Private Attributes</h2></td></tr>
 <dl class="section return"><dt>Returns</dt><dd><code><a class="el" href="classproxen_1_1sysproxy_1_1_proxyconf.html" title="System proxy configuration object, e.g.">sysproxy::Proxyconf</a></code> the system proxy configuration for the given proxy. If no proxy setting exists, <code>None</code> is returned. </dd></dl>
 <dl class="section see"><dt>See also</dt><dd><a class="el" href="classproxen_1_1sysproxy_1_1_sysenv.html#a2009a6d2fef5ae8c9d144195b6a2b791" title="Gets the value of a proxy setting as a sysproxy::Proxyconf object.">sysproxy::Sysenv::get_sys_proxy_parsed()</a>. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00855">855</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00926">926</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -431,7 +424,7 @@ Private Attributes</h2></td></tr>
 
 <p>Hook callback method to monitor setting proxy attributes and make corresponding changes in the system (writing the env variables). </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00901">901</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00972">972</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -452,7 +445,7 @@ Private Attributes</h2></td></tr>
 </div><div class="memdoc">
 <dl class="section return"><dt>Returns</dt><dd><code>dict</code> proxy settings serialized as a Python dictionary </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00794">794</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00865">865</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -473,7 +466,7 @@ Private Attributes</h2></td></tr>
 </div><div class="memdoc">
 <dl class="section return"><dt>Returns</dt><dd><code>str</code> proxy settings serialized as a string (in JSON format) </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00802">802</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00873">873</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -495,7 +488,7 @@ Private Attributes</h2></td></tr>
 
 <p>Increments the update mode counter (<a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#ac7daa01a8db9a27df220fa70f893d0d1" title="bool update mode counter">Proxy::_isupdating</a>) to show that a new update operation is under way. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00831">831</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00902">902</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -540,7 +533,7 @@ Private Attributes</h2></td></tr>
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01070">1070</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01141">1141</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -562,7 +555,7 @@ Private Attributes</h2></td></tr>
 
 <p>Getter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a884bd47b9fee926701d81fa7d9a8d67c" title="bool current proxy enabled status">Proxy::_enabled</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00926">926</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00997">997</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -594,7 +587,7 @@ Private Attributes</h2></td></tr>
 
 <p>Setter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a884bd47b9fee926701d81fa7d9a8d67c" title="bool current proxy enabled status">Proxy::_enabled</a>: enables or disables the system proxy. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00933">933</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01004">1004</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -616,7 +609,7 @@ Private Attributes</h2></td></tr>
 
 <p>Decrements the update mode counter (<a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#ac7daa01a8db9a27df220fa70f893d0d1" title="bool update mode counter">Proxy::_isupdating</a>) and updates the underlying environment variables if the counter is zero. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00836">836</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00907">907</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -649,7 +642,7 @@ Private Attributes</h2></td></tr>
 <p>Sets member properties reading from a Python dictionary. </p>
 <p >The dictionary may have been produced by a previous call to <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#af946e55faf36ac3b32905d3e6ac7a723">Proxy::asdict()</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00807">807</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00878">878</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -682,7 +675,7 @@ Private Attributes</h2></td></tr>
 <p>Sets member properties reading from a JSON-formatted string. </p>
 <p >The string may have been produced by a previous call to <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#ab02f779a6ac70c3077e20191220f90d4">Proxy::asstr()</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00826">826</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00897">897</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -704,7 +697,7 @@ Private Attributes</h2></td></tr>
 
 <p>Getter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#abc0f4691b3929dedc5f6d50a3f129880" title="sysproxy::Proxyconf FTP proxy object (or None if not set)">Proxy::_ftp_proxy</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01019">1019</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01090">1090</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -736,7 +729,7 @@ Private Attributes</h2></td></tr>
 
 <p>Setter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#abc0f4691b3929dedc5f6d50a3f129880" title="sysproxy::Proxyconf FTP proxy object (or None if not set)">Proxy::_ftp_proxy</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01026">1026</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01097">1097</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -758,7 +751,7 @@ Private Attributes</h2></td></tr>
 
 <p>Getter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a6cfba8765b8977e27d4ca5cec8099b7d" title="sysproxy::Proxyconf HTTP proxy object (or None if not set)">Proxy::_http_proxy</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00973">973</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01044">1044</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -790,7 +783,7 @@ Private Attributes</h2></td></tr>
 
 <p>Setter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a6cfba8765b8977e27d4ca5cec8099b7d" title="sysproxy::Proxyconf HTTP proxy object (or None if not set)">Proxy::_http_proxy</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00980">980</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01051">1051</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -812,7 +805,7 @@ Private Attributes</h2></td></tr>
 
 <p>Getter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a279d932cf8e9c2efb07fbbe9b45139a8" title="sysproxy::Proxyconf HTTPS proxy object (or None if not set)">Proxy::_https_proxy</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01001">1001</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01072">1072</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -844,7 +837,7 @@ Private Attributes</h2></td></tr>
 
 <p>Setter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a279d932cf8e9c2efb07fbbe9b45139a8" title="sysproxy::Proxyconf HTTPS proxy object (or None if not set)">Proxy::_https_proxy</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01008">1008</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01079">1079</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -866,7 +859,7 @@ Private Attributes</h2></td></tr>
 
 <p>Getter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a9db9b98487c753ac6e73cf96154186d9" title="sysproxy::Noproxy proxy bypass configuration object (or None if not set)">Proxy::_noproxy</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00953">953</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01024">1024</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -898,7 +891,7 @@ Private Attributes</h2></td></tr>
 
 <p>Setter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a9db9b98487c753ac6e73cf96154186d9" title="sysproxy::Noproxy proxy bypass configuration object (or None if not set)">Proxy::_noproxy</a>: sets or unsets the proxy bypass addresses. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00960">960</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01031">1031</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -937,7 +930,7 @@ Private Attributes</h2></td></tr>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd><code><a class="el" href="classproxen_1_1sysproxy_1_1_proxyconf.html" title="System proxy configuration object, e.g.">sysproxy::Proxyconf</a></code> the corresponding proxy object </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01056">1056</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01127">1127</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -969,7 +962,7 @@ Private Attributes</h2></td></tr>
 
 <p>Reads proxy settings from a JSON file and applies them. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00887">887</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00958">958</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -991,7 +984,7 @@ Private Attributes</h2></td></tr>
 
 <p>Initializes the member properties from the current system proxy settings. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00862">862</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00933">933</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1014,7 +1007,7 @@ Private Attributes</h2></td></tr>
 <p>Restores the proxy settings from the backup. </p>
 <dl class="section see"><dt>See also</dt><dd><a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a57da68f4179770817ff5a1a8f0c2dd3d" title="Saves the current proxy config to a dictonary as backup.">Proxy::save()</a> </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01101">1101</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01172">1172</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1036,7 +1029,7 @@ Private Attributes</h2></td></tr>
 
 <p>Getter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#aed5e898158a47ee994fa89b7b39f424a" title="sysproxy::Proxyconf RSYNC proxy object (or None if not set)">Proxy::_rsync_proxy</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01037">1037</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01108">1108</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1068,7 +1061,7 @@ Private Attributes</h2></td></tr>
 
 <p>Setter for <a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#aed5e898158a47ee994fa89b7b39f424a" title="sysproxy::Proxyconf RSYNC proxy object (or None if not set)">Proxy::_rsync_proxy</a>. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01044">1044</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01115">1115</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1091,7 +1084,7 @@ Private Attributes</h2></td></tr>
 <p>Saves the current proxy config to a dictonary as backup. </p>
 <dl class="section see"><dt>See also</dt><dd><a class="el" href="classproxen_1_1sysproxy_1_1_proxy.html#a0fdd80c4acd6a5ec102545d8c8d526f9" title="Restores the proxy settings from the backup.">Proxy::restore()</a> </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01095">1095</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01166">1166</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1123,7 +1116,7 @@ Private Attributes</h2></td></tr>
 
 <p>Stores the current proxy settings in a JSON file. </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00878">878</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00949">949</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1150,7 +1143,7 @@ Private Attributes</h2></td></tr>
 
 <p><code>bool</code> current proxy enabled status </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00864">864</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00935">935</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1176,7 +1169,7 @@ Private Attributes</h2></td></tr>
 
 <p><code><a class="el" href="classproxen_1_1sysproxy_1_1_proxyconf.html" title="System proxy configuration object, e.g.">sysproxy::Proxyconf</a></code> FTP proxy object (or <code>None</code> if not set) </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00872">872</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00943">943</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1202,7 +1195,7 @@ Private Attributes</h2></td></tr>
 
 <p><code><a class="el" href="classproxen_1_1sysproxy_1_1_proxyconf.html" title="System proxy configuration object, e.g.">sysproxy::Proxyconf</a></code> HTTP proxy object (or <code>None</code> if not set) </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00868">868</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00939">939</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1228,7 +1221,7 @@ Private Attributes</h2></td></tr>
 
 <p><code><a class="el" href="classproxen_1_1sysproxy_1_1_proxyconf.html" title="System proxy configuration object, e.g.">sysproxy::Proxyconf</a></code> HTTPS proxy object (or <code>None</code> if not set) </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00870">870</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00941">941</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1254,7 +1247,7 @@ Private Attributes</h2></td></tr>
 
 <p><code>bool</code> update mode counter </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00789">789</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00860">860</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1280,7 +1273,7 @@ Private Attributes</h2></td></tr>
 
 <p><code><a class="el" href="classproxen_1_1sysproxy_1_1_noproxy.html" title="Proxy bypass (no-proxy) configuration object.">sysproxy::Noproxy</a></code> proxy bypass configuration object (or <code>None</code> if not set) </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00866">866</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00937">937</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1306,7 +1299,7 @@ Private Attributes</h2></td></tr>
 
 <p><code><a class="el" href="classproxen_1_1sysproxy_1_1_proxyconf.html" title="System proxy configuration object, e.g.">sysproxy::Proxyconf</a></code> RSYNC proxy object (or <code>None</code> if not set) </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00874">874</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00945">945</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1324,7 +1317,7 @@ Private Attributes</h2></td></tr>
 
 <p><code>bool</code> property to get and set the enabled status of the system proxy </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00821">821</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00892">892</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1340,7 +1333,7 @@ Private Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01077">1077</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01148">1148</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1356,7 +1349,7 @@ Private Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01075">1075</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01146">1146</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1372,7 +1365,7 @@ Private Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01076">1076</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01147">1147</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1390,7 +1383,7 @@ Private Attributes</h2></td></tr>
 
 <p><code><a class="el" href="classproxen_1_1sysproxy_1_1_noproxy.html" title="Proxy bypass (no-proxy) configuration object.">sysproxy::Noproxy</a></code> proxy bypass configuration object </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00819">819</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00890">890</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1406,7 +1399,7 @@ Private Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01078">1078</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01149">1149</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1424,7 +1417,7 @@ Private Attributes</h2></td></tr>
 
 <p><code>str</code> default settings file that can be used to read and store the proxy settings </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00785">785</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00856">856</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1442,7 +1435,7 @@ Private Attributes</h2></td></tr>
 
 <p><code>dict</code> backup proxy settings as a dictionary </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01097">1097</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l01168">1168</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>
@@ -1460,7 +1453,7 @@ Private Attributes</h2></td></tr>
 
 <p><code><a class="el" href="classproxen_1_1sysproxy_1_1_sysenv.html" title="A class to operate system environment variables (cross-platform).">sysproxy::Sysenv</a></code> object to operate proxy-related environment variables </p>
 
-<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00787">787</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
+<p class="definition">Definition at line <a class="el" href="sysproxy_8py_source.html#l00858">858</a> of file <a class="el" href="sysproxy_8py_source.html">sysproxy.py</a>.</p>
 
 </div>
 </div>

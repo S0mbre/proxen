@@ -259,6 +259,13 @@ class Sysenv:
             res = self.globals.get(envname, default if case_sensitive else self.globals.get(envname.upper(), self.globals.get(envname.lower(), default)))
         return res
 
+    ## Searches for environment exports in a Unix file given a regex pattern.
+    # @param envname_pattern `str` enviroment name pattern (without the 'export='), e.g. '.*proxy'
+    # @param filename `str` full path to the file to search in (path must be expanded!)
+    # @param case_sensitive `bool` perform case-sensitive pattern search (default = `False`)
+    # @param reverse `bool` return the reversed result, i.e. everything in the file **except** the found matches
+    # @param raw `bool` return result as a raw string (output by `grep`), i.e. matches separated by the newline symbol
+    # @returns `str`|`dict` if `raw` is `True`, returns the raw `grep` output; otherwise, returns a `dict` of `{env: value}` pairs
     def _unix_get_from_file(self, envname_pattern, filename, case_sensitive=False, reverse=False, raw=False) -> Union[dict, str]:
         if OS == 'Windows':
             raise Exception('This method is only for UNIX platforms!')
@@ -292,6 +299,12 @@ class Sysenv:
         except:
             return None
 
+    ## Deletes matching environment exports from a Unix file.
+    # @param envname_pattern `str` enviroment name pattern (without the 'export='), e.g. '.*proxy'
+    # @param filename `str` full path to the file to search in (path must be expanded!)
+    # @param case_sensitive `bool` perform case-sensitive pattern search (default = `False`)
+    # @returns `bool` success = `True`, failure = `False`
+    # @see Sysenv::_unix_get_from_file()
     def _unix_delete_from_file(self, envname_pattern, filename, case_sensitive=False) -> bool:
         if OS == 'Windows':
             raise Exception('This method is only for UNIX platforms!')
